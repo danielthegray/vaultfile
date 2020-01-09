@@ -68,10 +68,12 @@ pub mod vaultfile {
             return None;
         }
 
+        /// Registers a new key in the vaultfile, under a specified name.
+        /// If a key under that name already exists, it will be overwritten.
         pub fn register_key(
             &mut self,
-            key_name: &str,
-            key_data: RSAPublicKey,
+            name_new_key: &str,
+            new_key: RSAPublicKey,
             private_key: Option<RSAPrivateKey>,
         ) -> Result<(), VaultfileError> {
             if self.secrets.len() > 0 {
@@ -106,14 +108,14 @@ pub mod vaultfile {
                     let raw_aes_key = private_key.decrypt(pkcs, &raw_encrypted_key)?;
                     // we encrypt the AES key using the newly registered public key
                     // to grant them access to the secret
-                    let new_encrypted = key_data.encrypt(&mut rng, pkcs, &raw_aes_key)?;
+                    let new_encrypted = new_key.encrypt(&mut rng, pkcs, &raw_aes_key)?;
                     let base64_encrypted_key = base64::encode(&new_encrypted);
                     secret
                         .encrypted_key
-                        .insert(String::from(key_name), base64_encrypted_key);
+                        .insert(String::from(name_new_key), base64_encrypted_key);
                 }
             }
-            self.keys.insert(String::from("key_name"), key_data);
+            self.keys.insert(String::from(name_new_key), new_key);
             Ok(())
         }
 
@@ -144,6 +146,39 @@ pub mod vaultfile {
             Ok(())
         }
 
+        pub fn read_secret(
+            &self,
+            secret_name: String,
+            private_key: RSAPrivateKey,
+        ) -> Result<String, VaultfileError> {
+            let key_name = match self.find_registered_name_of_key(private_key) {
+                Some(name) => name,
+                None => {
+                    return Err(VaultfileError{
+                        kind: VaultfileErrorKind::PrivateKeyNotRegistered,
+                    })
+                }
+            };
+            let secret_to_read = match self.secrets.get(&secret_name) {
+                Some(secret) => secret,
+                None => {
+                    return Err(VaultfileError {
+                        kind: VaultfileErrorKind::SecretNotFound(secret_name),
+                    })
+                }
+            };
+            let encrypted_secret = secret_to_read.secret;
+            let base64_aes_key = match secret_to_read.encrypted_key.get(&key_name) {
+                Some(b64_key) => b64_key,
+                None => {return Err(VaultfileError{
+                    kind: VaultfileErrorKind::SecretNotSharedWithAllRegisteredKeys(secret_name)
+                })}
+            };
+            let rsa_encrypted_aes_key = base64::decode(&base64_aes_key)?;
+            let aes_key = private_key.decrypt(pkcs, &rsa_encrypted_aes_key)?;
+            decrypt_secret(&secret_name, &encrypted_secret, &aes_key)
+        }
+
         pub fn save_to_file(&self, vaultfile_path: &str) -> Result<(), VaultfileError> {
             let vaultfile_json = serde_json::to_string_pretty(&self)?;
             write_json_to_file(vaultfile_path, vaultfile_json, true)?;
@@ -169,6 +204,27 @@ pub mod vaultfile {
         EncryptionResult {
             aes_key: key,
             encrypted_base: ciphertext_base64,
+        }
+    }
+
+    fn decrypt_secret(secret_name: &str, secret_base64: &str, key: &[u8]) -> Result<String, VaultfileError> {
+        let key_for_aes = GenericArray::clone_from_slice(key);
+        let cipher = Aes256::new(&key_for_aes);
+        let secret_bytes = match base64::decode(secret_base64) {
+            Ok(data) => data,
+            Err(_) => return {
+                Err(VaultfileError{
+                    kind: VaultfileErrorKind::BadBase64Secret(String::from(secret_name)),
+                })
+            }
+        };
+        let mut secret_bytes = GenericArray::clone_from_slice(&secret_bytes);
+        cipher.decrypt_block(&mut secret_bytes);
+        match String::from_utf8(secret_bytes.as_slice().to_vec()) {
+            Ok(decrypted_secret) => Ok(decrypted_secret),
+            Err(_) => return Err(VaultfileError{
+                kind: VaultfileErrorKind::CorruptDataInSecret(String::from(secret_name)),
+            })
         }
     }
 
@@ -245,6 +301,9 @@ pub mod vaultfile {
         SecretNotSharedWithAllRegisteredKeys(String),
 
         BadBase64String(String),
+        BadBase64Secret(String),
+        SecretNotFound(String),
+        CorruptDataInSecret(String),
     }
 
     impl From<std::io::Error> for VaultfileError {
