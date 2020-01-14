@@ -1,4 +1,5 @@
 mod vaultfile;
+use vaultfile::Vaultfile;
 
 fn print_help() {
     println!("vaultfile - A basic shared secret manager");
@@ -19,7 +20,7 @@ fn print_help() {
 
 fn main() {
     let cli_args = std::env::args();
-    vaultfile::Vaultfile::generate_new_key("test.key");
+    Vaultfile::generate_new_key("test.key");
     if cli_args.len() < 2 {
         print_help();
     }
