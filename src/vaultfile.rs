@@ -328,7 +328,7 @@ mod vaultfile_tests {
 
 #[derive(Debug)]
 pub struct VaultfileError {
-    kind: VaultfileErrorKind,
+    pub kind: VaultfileErrorKind,
 }
 
 #[derive(Debug)]

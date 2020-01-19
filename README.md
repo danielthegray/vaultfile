@@ -36,20 +36,28 @@ However, as stated earlier, this could still mean that the person has a copy of 
 
 Ideally, the users would always be reading the shared secret from the vaultfile directly, so the change, once the effective value is changed, should be transparent for everyone.
 
-### Private key storage
+### Private/public key storage
 
-The private key will be stored in the users `$HOME` folder, under `$HOME/.vaultfile/`. The default private key filename is `vault.key` (along with the public key `vault.key.pub`). This default key's name is "vault".
+Vaultfile private/public keys can be generated/stored anywhere. However, by default, they will be stored in the users `$HOME` directory, under `$HOME/.vaultfile/`. For Windows environments where `$HOME` is not defined, Vaultfile will fallback onto the `%USERPROFILE%` environment variable.
+
+The default private key filename is `$USER.key` (along with the public key `$USER.key.pub`). On Windows environments where `$USER` is not defined, Vaultfile will fallback onto `%USERNAME%`.
 
 ## Usage
 
 ### Generate a new keypair
-To generate a new private/public keypair (necessary when running `vaultfile` for the first time). The following command will be issued:
+To generate a new private/public keypair (necessary when running `vaultfile` for the first time), the `generate-key` subcommand should be issued. The following usages are possible:
 
-    vaultfile --new-key[=new_key_name]
+    vaultfile generate-key
+    vaultfile generate-key --key-name=key_name
+    vaultfile generate-key --key-path=path/to/private_key_file
 
-Optionally, you may specify a parameter (shown here as _`new_key_name`_) to create a keypair with another name than the default key name ("vault").
+In the first case, it will generate the private & public keys in the default location.
 
-Once the keypair exists on the system (under `$HOME/.vaultfile`), all of the other commands will work.
+The `--key-name` option is useful for generating a key in the default location, but with a name other than your username.
+
+Finally, the `--key-path` option is for when you just want to generate the private & public keys in a location other than the default.
+
+If the private or public key file exists, it will ask you if you want to overwrite it. To prevent the prompt from appearing, you can simply add `-y`/`--yes` or `-n`/`--no` to answer the question by default.
 
 ### User/key management
 Register a new public key in the vaultfile (if the vaultfile does not exist, it will be created for you):
@@ -88,12 +96,7 @@ the result will be printed out to standard out.
 If no key name is specified, `vaultfile` will try to open & use a key named "vault".
 
 ## Return codes
-| Return code value |         Meaning        |
-|:-----------------:|------------------------|
-|          0        |           OK           |
-|        -400       |   Malformed vaultfile  |
-|        -403       | Public key not present |
-|        -404       |   Vaultfile not found  |
+The standard BSD preferred exit codes were followed. [More information can be found here.](https://www.freebsd.org/cgi/man.cgi?query=sysexits&apropos=0&sektion=0&manpath=FreeBSD+11.2-stable&arch=default&format=html)
 
 ## Some design decisions
 
