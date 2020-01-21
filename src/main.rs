@@ -123,6 +123,22 @@ fn main() {
                     .help("Set this option to NOT overwrite the key file if it already exists")
                 )
         )
+        .subcommand(
+            SubCommand::with_name("register-key")
+                .about("Register a key in a vaultfile, creating the vaultfile if it does not exist.")
+                .arg(
+                    Arg::with_name("file")
+                    .short("f")
+                    .long("file")
+                    .takes_value(true)
+                    .required(true)
+                    .help("The vaultfile to register the key in (it will be created if it does not exist).")
+                )
+                .arg(
+                    Arg::with_name("key_name")
+                    .
+                )
+        )
         .get_matches_safe();
 
     let cli_call = match cli_call {

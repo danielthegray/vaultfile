@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 aes-soft = "0.3.3"
 base64 = "0.2.1"
-clap = "~2.33.0"
+clap = "~2.33"
 exitcode = "1.1.2"
 rsa = { version = "0.2.0", features = ["serde1"] }
 rand = "0.7.2"
