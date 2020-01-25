@@ -84,13 +84,22 @@ The parameter to specify this is `--private-key-name`, which should be the name 
     vaultfile register-key -f secret_file.vault --key-name=<KEY_NAME> --key-file=<PATH_TO_PUBLIC_KEY_FILE> --private--key-name=<PRIVATE_KEY_NAME>
     vaultfile register-key -f secret_file.vault --key-name=<KEY_NAME> --key-json=<PUBLIC_KEY_JSON_STRING> --private-key-name=<PRIVATE_KEY_NAME>
 
-#### Listing of the keys registered in the vaultfile
+#### Listing of the public keys registered in the vaultfile
 
 List the keys registered in the vaultfile:
 
     vaultfile list-keys --file secret_file.vault
 
 Will output a list of names of the keys registered in the vaultfile.
+
+#### Show a public key registered in a vaultfile
+To show the JSON-encoding of a public key registered in a vaultfile:
+
+    vaultfile list-keys --file secret_file.vault --key-name gandalf
+
+This will output a JSON string in one line to `stdout`, containing the numerical parameters of the public key registered in the vaultfile. Specifying a name that is not registered will output an error message on `stderr`.
+
+#### Remove a public key from a vaultfile
 
 Remove a public key from the vaultfile:
 

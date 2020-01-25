@@ -283,6 +283,10 @@ pub fn parse_public_key(public_key_json: &str) -> Result<RSAPublicKey, Vaultfile
     Ok(public_key)
 }
 
+pub fn public_key_to_json(public_key: &RSAPublicKey) -> Result<String, serde_json::Error> {
+    serde_json::to_string(public_key)
+}
+
 pub fn load_json_from_file(json_file_path: &str) -> Result<String, std::io::Error> {
     let mut json_file = File::open(json_file_path)?;
     let mut json_string = String::new();

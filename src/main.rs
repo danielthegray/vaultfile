@@ -1,10 +1,9 @@
 mod vaultfile;
 
-use rsa::RSAPublicKey;
 use std::path::Path;
 use std::process::exit;
-use vaultfile::VaultfileErrorKind;
-use vaultfile::{load_private_key, load_public_key, parse_public_key, Vaultfile};
+use vaultfile::{Vaultfile, VaultfileErrorKind};
+use vaultfile::{load_private_key, load_public_key, parse_public_key, public_key_to_json};
 
 extern crate clap;
 use clap::{App, Arg, ArgMatches, SubCommand};
@@ -264,6 +263,31 @@ fn list_keys_command(cli_call: &ArgMatches) {
     }
 }
 
+fn show_key_command(cli_call: &ArgMatches) {
+    let vaultfile_path = cli_call.value_of("file").unwrap();
+    let name_of_key_to_show = cli_call.value_of("key-name").unwrap();
+    let vaultfile = match Vaultfile::load_from_file(vaultfile_path) {
+        Ok(v) => v,
+        Err(error) => match error.kind {
+            VaultfileErrorKind::VaultfileNotFound => {
+                eprintln!("No vaultfile found at {}!", vaultfile_path);
+                exit(exitcode::NOINPUT);
+            }
+            _ => panic!("Unexpected error! {:?}", error),
+        }
+    };
+    match vaultfile.keys.get(name_of_key_to_show) {
+        Some(key) => println!("{}", match public_key_to_json(key) {
+            Ok(key_json) => key_json,
+            Err(serde_error) => panic!("Key data is corrupt! {:?}", serde_error),
+        }),
+        None => {
+            eprintln!("No key named '{}' was found in the vaultfile at {}", name_of_key_to_show, vaultfile_path);
+            exit(exitcode::DATAERR);
+        }
+    }
+}
+
 fn main() {
     let username = get_username();
     let cli_call = App::new("vaultfile")
@@ -372,6 +396,25 @@ fn main() {
                 .help("The path to the vaultfile to use.")
             )
         )
+        .subcommand(
+            SubCommand::with_name("show-key")
+            .about("Prints out the JSON-encoded public key registered in the specified vaultfile (to stdout).")
+            .arg(
+                Arg::with_name("file")
+                .long("file")
+                .short("f")
+                .takes_value(true)
+                .required(true)
+                .help("The path to the vaultfile to use.")
+            )
+            .arg(
+                Arg::with_name("key-name")
+                .long("key-name")
+                .takes_value(true)
+                .required(true)
+                .help("The name of the key to show.")
+            )
+        )
         .get_matches_safe();
 
     let cli_call = match cli_call {
@@ -392,6 +435,8 @@ fn main() {
         register_key_command(cli_call);
     } else if let Some(cli_call) = cli_call.subcommand_matches("list-keys") {
         list_keys_command(cli_call);
+    } else if let Some(cli_call) = cli_call.subcommand_matches("show-key") {
+        show_key_command(cli_call);
     }
     exit(exitcode::OK);
 }
