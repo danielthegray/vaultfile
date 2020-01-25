@@ -247,6 +247,23 @@ fn register_key_command(cli_call: &ArgMatches) {
     );
 }
 
+fn list_keys_command(cli_call: &ArgMatches) {
+    let vaultfile_path = cli_call.value_of("file").unwrap();
+    let vaultfile = match Vaultfile::load_from_file(vaultfile_path) {
+        Ok(v) => v,
+        Err(error) => match error.kind {
+            VaultfileErrorKind::VaultfileNotFound => {
+                eprintln!("No vaultfile found at {}!", vaultfile_path);
+                exit(exitcode::NOINPUT);
+            }
+            _ => panic!("Unexpected error! {:?}", error),
+        }
+    };
+    for registered_key_name in vaultfile.keys.keys() {
+        println!("{}", registered_key_name);
+    }
+}
+
 fn main() {
     let username = get_username();
     let cli_call = App::new("vaultfile")
@@ -343,6 +360,18 @@ fn main() {
                     .help("Set this option to NOT overwrite the key in the vaultfile if it is already registered.")
                 )
         )
+        .subcommand(
+            SubCommand::with_name("list-keys")
+            .about("List all the keys registered in the vaultfile.")
+            .arg(
+                Arg::with_name("file")
+                .long("file")
+                .short("f")
+                .takes_value(true)
+                .required(true)
+                .help("The path to the vaultfile to use.")
+            )
+        )
         .get_matches_safe();
 
     let cli_call = match cli_call {
@@ -361,5 +390,8 @@ fn main() {
         generate_key_command(cli_call);
     } else if let Some(cli_call) = cli_call.subcommand_matches("register-key") {
         register_key_command(cli_call);
+    } else if let Some(cli_call) = cli_call.subcommand_matches("list-keys") {
+        list_keys_command(cli_call);
     }
+    exit(exitcode::OK);
 }

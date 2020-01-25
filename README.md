@@ -88,7 +88,9 @@ The parameter to specify this is `--private-key-name`, which should be the name 
 
 List the keys registered in the vaultfile:
 
-    vaultfile list-keys [-f] secret_file.vault
+    vaultfile list-keys --file secret_file.vault
+
+Will output a list of names of the keys registered in the vaultfile.
 
 Remove a public key from the vaultfile:
 
