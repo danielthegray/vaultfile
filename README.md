@@ -59,27 +59,40 @@ Finally, the `--key-path` option is for when you just want to generate the priva
 
 If the private or public key file exists, it will ask you if you want to overwrite it. To prevent the prompt from appearing, you can simply add `-y`/`--yes` or `-n`/`--no` to answer the question by default.
 
+**NOTE: The private key file should probably be set to be accesible only by you (`chmod 600`). However, since this is meant as a cross-platform tool, no UNIX permission scheme can be assumed, which leaves the protection of your private key entirely up to you.**
+
 ### User/key management
-Register a new public key in the vaultfile (if the vaultfile does not exist, it will be created for you):
+#### Vaultfile creation & key/user registration
+The `register-key` subcommand can register a new public key in the vaultfile (if the vaultfile does not exist, it will be created for you). There are two ways to specify the public key to add:
 
-    vaultfile secret_file.vault --register-key <KEY_NAME> --key-file[=<PATH_TO_KEY_FILE>]
-or
-
-    vaultfile secret_file.vault --register-key <KEY_NAME> --key-json=<PUBLIC_KEY_JSON>
+    vaultfile register-key -f secret_file.vault --key-name=<KEY_NAME> --key-file=<PATH_TO_PUBLIC_KEY_FILE>
+    vaultfile register-key -f secret_file.vault --key-name=<KEY_NAME> --key-json=<PUBLIC_KEY_JSON_STRING>
 
 The `<KEY_NAME>` string should be name you wish the key to have in the vaultfile. Normally it should be something like a username, or something else unique to you (so that other uses of the vaultfile will know who the key belongs to).
 
-A public key can be added as a file (first option) or as a JSON string (second option). A private key file can also be specified, but only the public key part of it will be registered in the vaultfile.
+A public key can be added as a file (first option) or as a JSON string (second option).
 
 If a key with that name already exists in the vaultfile, a confirmation warning will appearing asking if it's OK to overwrite the key (can be overwritten without confirmation if the `-y` flag is added).
 
+#### Registration of a new key in a vaultfile with secrets
+If the vaultfile already contains secrets, there is one more element needed to register a new key: a valid private key whose public key is already registered in the vaultfile.
+
+The reason is simple: any newly added key needs to gain access to all the secrets contained in the vaultfile (by design). Therefore, to register a new key, you need to be able to read all of the vaultfile's secrets, to re-encrypt them with the newly registered public key, thereby granting access to the new trusted party.
+
+The parameter to specify this is `--private-key-name`, which should be the name of a file under the `~/.vaultfile` directory (or `%USERPROFILE%\.vaultfile` on Windows), with a `.key` extension (i.e. `--private-key-name mithrandir` will open the file `~/.vaultfile/mithrandir.key`). Usage template:
+
+    vaultfile register-key -f secret_file.vault --key-name=<KEY_NAME> --key-file=<PATH_TO_PUBLIC_KEY_FILE> --private--key-name=<PRIVATE_KEY_NAME>
+    vaultfile register-key -f secret_file.vault --key-name=<KEY_NAME> --key-json=<PUBLIC_KEY_JSON_STRING> --private-key-name=<PRIVATE_KEY_NAME>
+
+#### Listing of the keys registered in the vaultfile
+
 List the keys registered in the vaultfile:
 
-    vaultfile secret_file.vault --list-keys
+    vaultfile list-keys [-f] secret_file.vault
 
 Remove a public key from the vaultfile:
 
-    vaultfile secret_file.vault --remove-key <KEY_NAME>
+    vaultfile remove-key -f secret_file.vault --key-name <KEY_NAME>
 
 ### Secret management
 Write/add a secret to a secret file:

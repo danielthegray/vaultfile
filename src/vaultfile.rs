@@ -13,6 +13,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::{Read, Write};
 use std::iter::FromIterator;
+use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
@@ -28,13 +29,25 @@ pub struct VaultfileSecret {
 
 #[derive(Serialize, Deserialize)]
 pub struct Vaultfile {
-    keys: HashMap<String, RSAPublicKey>,
+    pub keys: HashMap<String, RSAPublicKey>,
     // each secret is stored under a name
-    secrets: HashMap<String, VaultfileSecret>,
+    pub secrets: HashMap<String, VaultfileSecret>,
 }
 
 impl Vaultfile {
+    pub fn new() -> Vaultfile {
+        Vaultfile {
+            keys: HashMap::new(),
+            secrets: HashMap::new(),
+        }
+    }
+
     pub fn load_from_file(vaultfile_path: &str) -> Result<Vaultfile, VaultfileError> {
+        if !Path::new(vaultfile_path).is_file() {
+            return Err(VaultfileError {
+                kind: VaultfileErrorKind::VaultfileNotFound,
+            });
+        }
         let vaultfile_json = load_json_from_file(vaultfile_path)?;
         let vaultfile: Vaultfile = serde_json::from_str(&vaultfile_json)?;
         Ok(vaultfile)
@@ -249,19 +262,28 @@ fn decrypt_secret(
     }
 }
 
-fn load_private_key(private_key_path: &str) -> Result<RSAPrivateKey, VaultfileError> {
+pub fn load_private_key(private_key_path: &str) -> Result<RSAPrivateKey, VaultfileError> {
+    if !Path::new(private_key_path).is_file() {
+        return Err(VaultfileError {
+            kind: VaultfileErrorKind::PrivateKeyNotFound,
+        });
+    }
     let private_key_json = load_json_from_file(private_key_path)?;
     let private_key: RSAPrivateKey = serde_json::from_str(&private_key_json)?;
     Ok(private_key)
 }
 
-fn load_public_key(public_key_path: &str) -> Result<RSAPublicKey, VaultfileError> {
+pub fn load_public_key(public_key_path: &str) -> Result<RSAPublicKey, VaultfileError> {
     let public_key_json = load_json_from_file(public_key_path)?;
+    parse_public_key(&public_key_json)
+}
+
+pub fn parse_public_key(public_key_json: &str) -> Result<RSAPublicKey, VaultfileError> {
     let public_key: RSAPublicKey = serde_json::from_str(&public_key_json)?;
     Ok(public_key)
 }
 
-fn load_json_from_file(json_file_path: &str) -> Result<String, std::io::Error> {
+pub fn load_json_from_file(json_file_path: &str) -> Result<String, std::io::Error> {
     let mut json_file = File::open(json_file_path)?;
     let mut json_string = String::new();
     json_file.read_to_string(&mut json_string)?;
@@ -336,6 +358,8 @@ pub enum VaultfileErrorKind {
     IoError(std::io::Error),
     InvalidJson(serde_json::error::Error),
     EncryptionError(rsa::errors::Error),
+    VaultfileNotFound,
+    PrivateKeyNotFound,
     // no private key was specified and it was required
     NoPrivateKeySpecified,
     // the private key specified is not registered in the vaultfile
