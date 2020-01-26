@@ -1,13 +1,12 @@
 extern crate base64;
+extern crate crypto;
 extern crate rand;
 extern crate rsa;
 
+use crypto::aessafe::{AesSafe256DecryptorX8, AesSafe256EncryptorX8};
+use crypto::symmetriccipher::{BlockDecryptorX8, BlockEncryptorX8};
 use rand::RngCore;
 use rsa::{PaddingScheme, PublicKey, RSAPrivateKey, RSAPublicKey};
-
-use aes_soft::block_cipher_trait::generic_array::GenericArray;
-use aes_soft::block_cipher_trait::BlockCipher;
-use aes_soft::Aes256;
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -156,6 +155,10 @@ impl Vaultfile {
         Vec::from_iter(self.keys.keys().map(|key_name| String::from(key_name)))
     }
 
+    pub fn has_secret_named(&self, secret_name: &str) -> bool {
+        self.secrets.contains_key(secret_name)
+    }
+
     pub fn add_secret_utf8(
         &mut self,
         secret_name: &str,
@@ -270,12 +273,19 @@ fn encrypt_utf8_string(plaintext_utf8: &str) -> EncryptionResult {
 fn encrypt_byte_sequence(plaintext: &[u8]) -> EncryptionResult {
     let mut key: [u8; 32] = [0u8; 32];
     rand::rngs::OsRng.fill_bytes(&mut key);
-    let key_for_aes = GenericArray::clone_from_slice(&key);
-    let cipher = Aes256::new(&key_for_aes);
-    let mut plaintext_bytes = GenericArray::clone_from_slice(plaintext);
-
-    cipher.encrypt_block(&mut plaintext_bytes);
-    let ciphertext_base64 = base64::encode(&plaintext_bytes);
+    let encryptor = AesSafe256EncryptorX8::new(&key);
+    let plaintext_length_bytes = (plaintext.len() as u64).to_le_bytes();
+    let full_plaintext_length = plaintext_length_bytes.len() + plaintext.len();
+    let padding_length = 128 - full_plaintext_length % 128;
+    let mut plaintext_padding = vec![0; padding_length];
+    rand::rngs::OsRng.fill_bytes(&mut plaintext_padding);
+    let mut full_plaintext: Vec<u8> = Vec::with_capacity(plaintext_length_bytes.len() + plaintext.len() + plaintext_padding.len());
+    for byte in plaintext_length_bytes.iter().chain(plaintext.into_iter()).chain((&plaintext_padding).into_iter()) {
+        full_plaintext.push(byte.clone());
+    }
+    let mut ciphertext = vec![0; full_plaintext.len()];
+    encryptor.encrypt_block_x8(&full_plaintext, &mut ciphertext);
+    let ciphertext_base64 = base64::encode(&ciphertext);
     EncryptionResult {
         aes_key: key,
         encrypted_base: ciphertext_base64,
@@ -287,9 +297,8 @@ fn decrypt_secret(
     secret_base64: &str,
     key: &[u8],
 ) -> Result<String, VaultfileError> {
-    let key_for_aes = GenericArray::clone_from_slice(key);
-    let cipher = Aes256::new(&key_for_aes);
-    let secret_bytes = match base64::decode(secret_base64) {
+    let decryptor = AesSafe256DecryptorX8::new(key);
+    let ciphertext = match base64::decode(secret_base64) {
         Ok(data) => data,
         Err(_) => {
             return {
@@ -299,9 +308,9 @@ fn decrypt_secret(
             }
         }
     };
-    let mut secret_bytes = GenericArray::clone_from_slice(&secret_bytes);
-    cipher.decrypt_block(&mut secret_bytes);
-    match String::from_utf8(secret_bytes.as_slice().to_vec()) {
+    let mut plaintext = Vec::with_capacity(ciphertext.len());
+    decryptor.decrypt_block_x8(&ciphertext, &mut plaintext);
+    match String::from_utf8(plaintext) {
         Ok(decrypted_secret) => Ok(decrypted_secret),
         Err(_) => {
             return Err(VaultfileError {

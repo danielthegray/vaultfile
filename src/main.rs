@@ -104,6 +104,19 @@ fn check_file_overwrite(file_to_check: &str, overwrite_no: bool) {
     }
 }
 
+fn load_existing_vaultfile(vaultfile_path: &str) -> Vaultfile {
+    match Vaultfile::load_from_file(vaultfile_path) {
+        Ok(vaultfile) => vaultfile,
+        Err(error) => match error.kind {
+            VaultfileErrorKind::VaultfileNotFound => {
+                eprintln!("No vaultfile found at {}!", vaultfile_path);
+                exit(exitcode::NOINPUT);
+            }
+            _ => panic!("Unexpected error! {:?}", error),
+        },
+    }
+}
+
 fn generate_key_command(cli_call: &ArgMatches) {
     let key_path = if cli_call.is_present("key-path") {
         // we can simply unwrap because clap verifies that a value has been provided
@@ -248,16 +261,7 @@ fn register_key_command(cli_call: &ArgMatches) {
 
 fn list_keys_command(cli_call: &ArgMatches) {
     let vaultfile_path = cli_call.value_of("file").unwrap();
-    let vaultfile = match Vaultfile::load_from_file(vaultfile_path) {
-        Ok(v) => v,
-        Err(error) => match error.kind {
-            VaultfileErrorKind::VaultfileNotFound => {
-                eprintln!("No vaultfile found at {}!", vaultfile_path);
-                exit(exitcode::NOINPUT);
-            }
-            _ => panic!("Unexpected error! {:?}", error),
-        },
-    };
+    let vaultfile = load_existing_vaultfile(vaultfile_path);
     for registered_key_name in vaultfile.list_keys() {
         println!("{}", registered_key_name);
     }
@@ -266,16 +270,7 @@ fn list_keys_command(cli_call: &ArgMatches) {
 fn show_key_command(cli_call: &ArgMatches) {
     let vaultfile_path = cli_call.value_of("file").unwrap();
     let name_of_key_to_show = cli_call.value_of("key-name").unwrap();
-    let vaultfile = match Vaultfile::load_from_file(vaultfile_path) {
-        Ok(v) => v,
-        Err(error) => match error.kind {
-            VaultfileErrorKind::VaultfileNotFound => {
-                eprintln!("No vaultfile found at {}!", vaultfile_path);
-                exit(exitcode::NOINPUT);
-            }
-            _ => panic!("Unexpected error! {:?}", error),
-        },
-    };
+    let vaultfile = load_existing_vaultfile(vaultfile_path);
     match vaultfile.get_key(name_of_key_to_show) {
         Some(key) => println!(
             "{}",
@@ -297,16 +292,7 @@ fn show_key_command(cli_call: &ArgMatches) {
 fn deregister_key_command(cli_call: &ArgMatches) {
     let vaultfile_path = cli_call.value_of("file").unwrap();
     let name_of_key_to_remove = cli_call.value_of("key-name").unwrap();
-    let mut vaultfile = match Vaultfile::load_from_file(vaultfile_path) {
-        Ok(v) => v,
-        Err(error) => match error.kind {
-            VaultfileErrorKind::VaultfileNotFound => {
-                eprintln!("No vaultfile found at {}!", vaultfile_path);
-                exit(exitcode::NOINPUT);
-            }
-            _ => panic!("Unexpected error! {:?}", error),
-        },
-    };
+    let mut vaultfile = load_existing_vaultfile(vaultfile_path);
     vaultfile
         .deregister_key(name_of_key_to_remove)
         .unwrap_or_else(|error| {
@@ -316,6 +302,57 @@ fn deregister_key_command(cli_call: &ArgMatches) {
             );
             exit(exitcode::SOFTWARE);
         });
+    vaultfile
+        .save_to_file(vaultfile_path)
+        .unwrap_or_else(|error| {
+            eprintln!(
+                "Unexpected error when saving vaultfile after executing key deregistration! {:?}",
+                error
+            );
+            exit(exitcode::IOERR);
+        })
+}
+
+fn add_secret_command(cli_call: &ArgMatches) {
+    let vaultfile_path = cli_call.value_of("file").unwrap();
+    let secret_name = cli_call.value_of("name").unwrap();
+    let secret_value_utf8 = cli_call.value_of("value");
+    let secret_value_base64 = cli_call.value_of("base64-value");
+    let mut vaultfile = load_existing_vaultfile(vaultfile_path);
+    if !cli_call.is_present("overwrite-yes") {
+        if vaultfile.has_secret_named(secret_name) {
+            if cli_call.is_present("overwrite-no") {
+                eprintln!("The vaultfile at '{}' already has a secret registered under name {}, and no overwriting has been selected. Doing nothing...", &vaultfile_path, &secret_name);
+                exit(exitcode::OK);
+            }
+            match read_user_confirmation(format!(
+                "Vaultfile at '{}' already has a secret registered under name {}. Overwrite?",
+                &vaultfile_path, &secret_name
+            )) {
+                Confirmation::YES => return,
+                Confirmation::NO => {
+                    eprintln!("The vaultfile at '{}' already has a secret registered under name {}, and no overwriting has been selected. Doing nothing...", &vaultfile_path, &secret_name);
+                    exit(exitcode::OK);
+                }
+            }
+        }
+    }
+    (match secret_value_utf8 {
+        Some(utf8_secret) => {
+            vaultfile.add_secret_utf8(secret_name, utf8_secret)
+        },
+        None => match secret_value_base64 {
+            Some(base64_secret) => {
+                vaultfile.add_secret_base64(secret_name, base64_secret)
+            },
+            None => {
+                panic!("Clap should have enforced that either --value or --base64-value was provided!");
+            }
+        }
+    }).unwrap_or_else(|error| {
+        eprintln!("Unexpected error while adding secret to vaultfile! {:?}", error);
+        exit(exitcode::SOFTWARE);
+    });
     vaultfile
         .save_to_file(vaultfile_path)
         .unwrap_or_else(|error| {
@@ -532,6 +569,8 @@ fn main() {
         show_key_command(cli_call);
     } else if let Some(cli_call) = cli_call.subcommand_matches("deregister-key") {
         deregister_key_command(cli_call);
+    } else if let Some(cli_call) = cli_call.subcommand_matches("add-secret") {
+        add_secret_command(cli_call);
     }
     exit(exitcode::OK);
 }
