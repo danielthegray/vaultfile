@@ -209,7 +209,7 @@ fn register_key_command(cli_call: &ArgMatches) {
         },
     };
     if !cli_call.is_present("overwrite-yes") {
-        if vaultfile.keys.contains_key(key_name) {
+        if vaultfile.is_key_registered(key_name) {
             if cli_call.is_present("overwrite-no") {
                 eprintln!("The vaultfile at '{}' already has a key registered under name {}, and no overwriting has been selected. Doing nothing...", &vaultfile_path, &key_name);
                 exit(exitcode::OK);
@@ -258,7 +258,7 @@ fn list_keys_command(cli_call: &ArgMatches) {
             _ => panic!("Unexpected error! {:?}", error),
         },
     };
-    for registered_key_name in vaultfile.keys.keys() {
+    for registered_key_name in vaultfile.list_keys() {
         println!("{}", registered_key_name);
     }
 }
@@ -276,10 +276,10 @@ fn show_key_command(cli_call: &ArgMatches) {
             _ => panic!("Unexpected error! {:?}", error),
         },
     };
-    match vaultfile.keys.get(name_of_key_to_show) {
+    match vaultfile.get_key(name_of_key_to_show) {
         Some(key) => println!(
             "{}",
-            match public_key_to_json(key) {
+            match public_key_to_json(&key) {
                 Ok(key_json) => key_json,
                 Err(serde_error) => panic!("Key data is corrupt! {:?}", serde_error),
             }
@@ -316,10 +316,15 @@ fn deregister_key_command(cli_call: &ArgMatches) {
             );
             exit(exitcode::SOFTWARE);
         });
-    vaultfile.save_to_file(vaultfile_path).unwrap_or_else(|error| {
-        eprintln!("Unexpected error when saving vaultfile after executing key deregistration! {:?}", error);
-        exit(exitcode::IOERR);
-    })
+    vaultfile
+        .save_to_file(vaultfile_path)
+        .unwrap_or_else(|error| {
+            eprintln!(
+                "Unexpected error when saving vaultfile after executing key deregistration! {:?}",
+                error
+            );
+            exit(exitcode::IOERR);
+        })
 }
 
 fn main() {

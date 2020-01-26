@@ -29,9 +29,9 @@ pub struct VaultfileSecret {
 
 #[derive(Serialize, Deserialize)]
 pub struct Vaultfile {
-    pub keys: HashMap<String, RSAPublicKey>,
+    keys: HashMap<String, RSAPublicKey>,
     // each secret is stored under a name
-    pub secrets: HashMap<String, VaultfileSecret>,
+    secrets: HashMap<String, VaultfileSecret>,
 }
 
 impl Vaultfile {
@@ -78,6 +78,19 @@ impl Vaultfile {
             }
         }
         return None;
+    }
+
+    pub fn is_key_registered(&self, key_name: &str) -> bool {
+        self.keys.contains_key(key_name)
+    }
+
+    pub fn get_key(&self, key_name: &str) -> Option<RSAPublicKey> {
+        match self.keys.get(key_name) {
+            Some(pub_key) => {
+                Some(RSAPublicKey::new(pub_key.n().clone(), pub_key.e().clone()).unwrap())
+            }
+            None => None,
+        }
     }
 
     /// Registers a new key in the vaultfile, under a specified name.
