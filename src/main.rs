@@ -473,6 +473,41 @@ fn main() {
                 .help("The name of the key to remove.")
             )
         )
+        .subcommand(
+            SubCommand::with_name("add-secret")
+            .about("Add a secret to the vaultfile.")
+            .arg(
+                Arg::with_name("file")
+                .long("file")
+                .short("f")
+                .takes_value(true)
+                .required(true)
+                .help("The path to the vaultfile to store the new secret in.")
+            )
+            .arg(
+                Arg::with_name("name")
+                .long("name")
+                .short("n")
+                .takes_value(true)
+                .required(true)
+                .help("The name under which to store the secret.")
+            )
+            .arg(
+                Arg::with_name("value")
+                .long("value")
+                .short("v")
+                .takes_value(true)
+                .required_unless("value-base64")
+                .help("The secret value to store in the vaultfile (assumed to be a utf8-encoded string).")
+            )
+            .arg(
+                Arg::with_name("base64-value")
+                .long("base64-value")
+                .takes_value(true)
+                .required_unless("value")
+                .help("The secret value to store in the vaultfile, encoded as a base64 string. This is useful for storing binary-sensitive data in a reliable way, or data that is difficult to escape for inclusion in a shell command.")
+            )
+        )
         .get_matches_safe();
 
     let cli_call = match cli_call {

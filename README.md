@@ -106,18 +106,24 @@ De-register a public key from the vaultfile:
     vaultfile deregister-key -f secret_file.vault --key-name <KEY_NAME>
 
 ### Secret management
-Write/add a secret to a secret file:
+#### Write a secret to a vaultfile
+To write/add a secret to a vaultfile, the following commands can be used:
 
-    vaultfile secret_file.vault --write <SECRET_NAME> <SECRET_VALUE>
+    vaultfile add-secret --file secret_file.vault --name=<SECRET_NAME> --value=<SECRET_VALUE>
+    vaultfile add-secret --file secret_file.vault --name=<SECRET_NAME> --base64-value=<BASE64_ENCODED_SECRET_VALUE>
 
 if a secret with that name already exists in the vaultfile, a confirmation warning will appearing asking if it's OK to overwrite the secret (can be overwritten without confirmation if the `-y` flag is added).
 
-Read a secret from a secret file:
+The second option exists to input information that is difficult to encode/escape, giving you the option to easily ensure that what is saved is exactly what was intended.
 
-    vaultfile secret_file.vault --read <SECRET_NAME> [--key <KEY_NAME>> | --key-file <KEY_FILE>]
+Notice that a secret can be added to the vaultfile without being in possession of any of the access keys. This is because the secret is encrypted with the public keys registered in the file and will afterwards only be readable by someone who possesses the private key that corresponds to that public key.
+
+#### Read a secret from the vaultfile.
+To read a secret from the vaultfile, the following command can be used:
+
+    vaultfile read-secret --file secret_file.vault --read <SECRET_NAME> [--key <KEY_NAME>> | --key-file <KEY_FILE>]
 
 the result will be printed out to standard out.
-If no key name is specified, `vaultfile` will try to open & use a key named "vault".
 
 ## Return codes
 The standard BSD preferred exit codes were followed. [More information can be found here.](https://www.freebsd.org/cgi/man.cgi?query=sysexits&apropos=0&sektion=0&manpath=FreeBSD+11.2-stable&arch=default&format=html)

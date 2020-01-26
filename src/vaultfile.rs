@@ -156,14 +156,42 @@ impl Vaultfile {
         Vec::from_iter(self.keys.keys().map(|key_name| String::from(key_name)))
     }
 
-    pub fn add_secret(
+    pub fn add_secret_utf8(
         &mut self,
         secret_name: &str,
-        secret_value: &str,
+        secret_value_utf8: &str,
     ) -> Result<(), VaultfileError> {
         let mut rng = rand::rngs::OsRng;
         let mut encrypted_key: HashMap<String, String> = HashMap::new();
-        let encrypted_secret = encrypt_string(secret_value);
+        let encrypted_secret = encrypt_utf8_string(secret_value_utf8);
+        for (key_name, rsa_key) in self.keys.iter() {
+            let aes_key_ciphertext =
+                rsa_key.encrypt(&mut rng, PADDING, &encrypted_secret.aes_key)?;
+            let aes_key_ciphertext = base64::encode(&aes_key_ciphertext);
+            encrypted_key.insert(String::from(key_name), aes_key_ciphertext);
+        }
+        // we simply update the value, without checking for a
+        // collision, since this is the expected use case.
+        // User confirmation will be implemented separately.
+        self.secrets.insert(
+            String::from(secret_name),
+            VaultfileSecret {
+                encrypted_key,
+                secret: encrypted_secret.encrypted_base,
+            },
+        );
+        Ok(())
+    }
+
+    pub fn add_secret_base64(
+        &mut self,
+        secret_name: &str,
+        secret_value_base64: &str,
+    ) -> Result<(), VaultfileError> {
+        let mut rng = rand::rngs::OsRng;
+        let mut encrypted_key: HashMap<String, String> = HashMap::new();
+        // TODO: add explicit error for when the base64 input string is bad!
+        let encrypted_secret = encrypt_base64_string(secret_value_base64)?;
         for (key_name, rsa_key) in self.keys.iter() {
             let aes_key_ciphertext =
                 rsa_key.encrypt(&mut rng, PADDING, &encrypted_secret.aes_key)?;
@@ -230,13 +258,21 @@ struct EncryptionResult {
     encrypted_base: String,
 }
 
-fn encrypt_string(plaintext: &str) -> EncryptionResult {
+fn encrypt_base64_string(plaintext_base64: &str) -> Result<EncryptionResult, base64::Base64Error> {
+    let raw_plaintext = base64::decode(plaintext_base64)?;
+    Ok(encrypt_byte_sequence(&raw_plaintext))
+}
+
+fn encrypt_utf8_string(plaintext_utf8: &str) -> EncryptionResult {
+    encrypt_byte_sequence(plaintext_utf8.as_bytes())
+}
+
+fn encrypt_byte_sequence(plaintext: &[u8]) -> EncryptionResult {
     let mut key: [u8; 32] = [0u8; 32];
     rand::rngs::OsRng.fill_bytes(&mut key);
     let key_for_aes = GenericArray::clone_from_slice(&key);
     let cipher = Aes256::new(&key_for_aes);
-    let plaintext_bytes = plaintext.as_bytes();
-    let mut plaintext_bytes = GenericArray::clone_from_slice(plaintext_bytes);
+    let mut plaintext_bytes = GenericArray::clone_from_slice(plaintext);
 
     cipher.encrypt_block(&mut plaintext_bytes);
     let ciphertext_base64 = base64::encode(&plaintext_bytes);
