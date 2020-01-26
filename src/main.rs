@@ -2,8 +2,8 @@ mod vaultfile;
 
 use std::path::Path;
 use std::process::exit;
-use vaultfile::{Vaultfile, VaultfileErrorKind};
 use vaultfile::{load_private_key, load_public_key, parse_public_key, public_key_to_json};
+use vaultfile::{Vaultfile, VaultfileErrorKind};
 
 extern crate clap;
 use clap::{App, Arg, ArgMatches, SubCommand};
@@ -256,7 +256,7 @@ fn list_keys_command(cli_call: &ArgMatches) {
                 exit(exitcode::NOINPUT);
             }
             _ => panic!("Unexpected error! {:?}", error),
-        }
+        },
     };
     for registered_key_name in vaultfile.keys.keys() {
         println!("{}", registered_key_name);
@@ -274,18 +274,52 @@ fn show_key_command(cli_call: &ArgMatches) {
                 exit(exitcode::NOINPUT);
             }
             _ => panic!("Unexpected error! {:?}", error),
-        }
+        },
     };
     match vaultfile.keys.get(name_of_key_to_show) {
-        Some(key) => println!("{}", match public_key_to_json(key) {
-            Ok(key_json) => key_json,
-            Err(serde_error) => panic!("Key data is corrupt! {:?}", serde_error),
-        }),
+        Some(key) => println!(
+            "{}",
+            match public_key_to_json(key) {
+                Ok(key_json) => key_json,
+                Err(serde_error) => panic!("Key data is corrupt! {:?}", serde_error),
+            }
+        ),
         None => {
-            eprintln!("No key named '{}' was found in the vaultfile at {}", name_of_key_to_show, vaultfile_path);
+            eprintln!(
+                "No key named '{}' was found in the vaultfile at {}",
+                name_of_key_to_show, vaultfile_path
+            );
             exit(exitcode::DATAERR);
         }
     }
+}
+
+fn deregister_key_command(cli_call: &ArgMatches) {
+    let vaultfile_path = cli_call.value_of("file").unwrap();
+    let name_of_key_to_remove = cli_call.value_of("key-name").unwrap();
+    let mut vaultfile = match Vaultfile::load_from_file(vaultfile_path) {
+        Ok(v) => v,
+        Err(error) => match error.kind {
+            VaultfileErrorKind::VaultfileNotFound => {
+                eprintln!("No vaultfile found at {}!", vaultfile_path);
+                exit(exitcode::NOINPUT);
+            }
+            _ => panic!("Unexpected error! {:?}", error),
+        },
+    };
+    vaultfile
+        .deregister_key(name_of_key_to_remove)
+        .unwrap_or_else(|error| {
+            eprintln!(
+                "Unexpected error when deregistering key '{}' from vaultfile at {}! {:?}",
+                name_of_key_to_remove, vaultfile_path, error
+            );
+            exit(exitcode::SOFTWARE);
+        });
+    vaultfile.save_to_file(vaultfile_path).unwrap_or_else(|error| {
+        eprintln!("Unexpected error when saving vaultfile after executing key deregistration! {:?}", error);
+        exit(exitcode::IOERR);
+    })
 }
 
 fn main() {
@@ -415,6 +449,25 @@ fn main() {
                 .help("The name of the key to show.")
             )
         )
+        .subcommand(
+            SubCommand::with_name("deregister-key")
+            .about("Removes a registered public key from the vaultfile (and removes all of the values encrypted with that public key from the vaultfile).")
+            .arg(
+                Arg::with_name("file")
+                .long("file")
+                .short("f")
+                .takes_value(true)
+                .required(true)
+                .help("The path to the vaultfile to use.")
+            )
+            .arg(
+                Arg::with_name("key-name")
+                .long("key-name")
+                .takes_value(true)
+                .required(true)
+                .help("The name of the key to remove.")
+            )
+        )
         .get_matches_safe();
 
     let cli_call = match cli_call {
@@ -437,6 +490,8 @@ fn main() {
         list_keys_command(cli_call);
     } else if let Some(cli_call) = cli_call.subcommand_matches("show-key") {
         show_key_command(cli_call);
+    } else if let Some(cli_call) = cli_call.subcommand_matches("deregister-key") {
+        deregister_key_command(cli_call);
     }
     exit(exitcode::OK);
 }

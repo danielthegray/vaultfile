@@ -99,11 +99,11 @@ To show the JSON-encoding of a public key registered in a vaultfile:
 
 This will output a JSON string in one line to `stdout`, containing the numerical parameters of the public key registered in the vaultfile. Specifying a name that is not registered will output an error message on `stderr`.
 
-#### Remove a public key from a vaultfile
+#### De-register a public key from a vaultfile
 
-Remove a public key from the vaultfile:
+De-register a public key from the vaultfile:
 
-    vaultfile remove-key -f secret_file.vault --key-name <KEY_NAME>
+    vaultfile deregister-key -f secret_file.vault --key-name <KEY_NAME>
 
 ### Secret management
 Write/add a secret to a secret file:
