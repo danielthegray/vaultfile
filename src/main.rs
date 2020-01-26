@@ -6,7 +6,7 @@ use vaultfile::{load_private_key, load_public_key, parse_public_key, public_key_
 use vaultfile::{Vaultfile, VaultfileErrorKind};
 
 extern crate clap;
-use clap::{App, Arg, ArgMatches, SubCommand};
+use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 
 fn get_home_directory() -> String {
     match std::env::var("HOME") {
@@ -408,6 +408,7 @@ fn main() {
         .version("0.1.0")
         .author("Daniel Gray")
         .about("A basic shared secret/credential manager")
+        .setting(AppSettings::ArgRequiredElseHelp)
         .subcommand(
             SubCommand::with_name("generate-key")
                 .about("Generate a new private key")
