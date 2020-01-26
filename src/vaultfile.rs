@@ -9,6 +9,7 @@ use rand::RngCore;
 use rsa::{PaddingScheme, PublicKey, RSAPrivateKey, RSAPublicKey};
 
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::fs::File;
 use std::io::prelude::{Read, Write};
 use std::iter::FromIterator;
@@ -216,7 +217,7 @@ impl Vaultfile {
 
     pub fn read_secret(
         &self,
-        secret_name: String,
+        secret_name: &str,
         private_key: RSAPrivateKey,
     ) -> Result<String, VaultfileError> {
         let key_name = match self.find_registered_name_of_key(&private_key) {
@@ -227,11 +228,11 @@ impl Vaultfile {
                 })
             }
         };
-        let secret_to_read = match self.secrets.get(&secret_name) {
+        let secret_to_read = match self.secrets.get(secret_name) {
             Some(secret) => secret,
             None => {
                 return Err(VaultfileError {
-                    kind: VaultfileErrorKind::SecretNotFound(secret_name),
+                    kind: VaultfileErrorKind::SecretNotFound(String::from(secret_name)),
                 })
             }
         };
@@ -240,7 +241,9 @@ impl Vaultfile {
             Some(b64_key) => b64_key,
             None => {
                 return Err(VaultfileError {
-                    kind: VaultfileErrorKind::SecretNotSharedWithAllRegisteredKeys(secret_name),
+                    kind: VaultfileErrorKind::SecretNotSharedWithAllRegisteredKeys(String::from(
+                        secret_name,
+                    )),
                 })
             }
         };
@@ -279,8 +282,14 @@ fn encrypt_byte_sequence(plaintext: &[u8]) -> EncryptionResult {
     let padding_length = 128 - full_plaintext_length % 128;
     let mut plaintext_padding = vec![0; padding_length];
     rand::rngs::OsRng.fill_bytes(&mut plaintext_padding);
-    let mut full_plaintext: Vec<u8> = Vec::with_capacity(plaintext_length_bytes.len() + plaintext.len() + plaintext_padding.len());
-    for byte in plaintext_length_bytes.iter().chain(plaintext.into_iter()).chain((&plaintext_padding).into_iter()) {
+    let mut full_plaintext: Vec<u8> = Vec::with_capacity(
+        plaintext_length_bytes.len() + plaintext.len() + plaintext_padding.len(),
+    );
+    for byte in plaintext_length_bytes
+        .iter()
+        .chain(plaintext.into_iter())
+        .chain((&plaintext_padding).into_iter())
+    {
         full_plaintext.push(byte.clone());
     }
     let mut ciphertext = vec![0; full_plaintext.len()];
@@ -308,8 +317,19 @@ fn decrypt_secret(
             }
         }
     };
-    let mut plaintext = Vec::with_capacity(ciphertext.len());
+    let mut plaintext = vec![0; ciphertext.len()];
     decryptor.decrypt_block_x8(&ciphertext, &mut plaintext);
+    let plaintext_size: [u8; 8] = match plaintext[0..8].try_into() {
+        Ok(size) => size,
+        Err(_) => {
+            return Err(VaultfileError {
+                kind: VaultfileErrorKind::CorruptDataInSecret(String::from(secret_name)),
+            })
+        }
+    };
+    let plaintext_size = u64::from_le_bytes(plaintext_size);
+    plaintext = plaintext[8..].to_vec();
+    plaintext.truncate(plaintext_size as usize);
     match String::from_utf8(plaintext) {
         Ok(decrypted_secret) => Ok(decrypted_secret),
         Err(_) => {

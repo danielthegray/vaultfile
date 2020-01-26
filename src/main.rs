@@ -124,15 +124,15 @@ fn generate_key_command(cli_call: &ArgMatches) {
     } else if cli_call.is_present("key-name") {
         ensure_vaultfile_folder_exists();
         format!(
-            "{}/.vaultfile/{}.key",
-            &get_home_directory(),
+            "{}/{}.key",
+            &get_default_vaultfile_folder(),
             &cli_call.value_of("key-name").unwrap()
         )
     } else {
         ensure_vaultfile_folder_exists();
         format!(
-            "{}/.vaultfile/{}.key",
-            &get_home_directory(),
+            "{}/{}.key",
+            &get_default_vaultfile_folder(),
             &get_username()
         )
     };
@@ -364,6 +364,44 @@ fn add_secret_command(cli_call: &ArgMatches) {
         })
 }
 
+fn read_secret_command(cli_call: &ArgMatches) {
+    let vaultfile_path = cli_call.value_of("file").unwrap();
+    let secret_name = cli_call.value_of("name").unwrap();
+    let private_key_path = match cli_call.value_of("key-file") {
+        Some(key_path) => String::from(key_path),
+        None => {
+            let key_name = cli_call.value_of("key-name").unwrap();
+            format!("{}/{}.key", &get_default_vaultfile_folder(), &key_name)
+        }
+    };
+    let private_key = match load_private_key(&private_key_path) {
+        Ok(key) => key,
+        Err(error) => match error.kind {
+            VaultfileErrorKind::PrivateKeyNotFound => {
+                eprintln!("No private key was found at {}!", &private_key_path);
+                exit(exitcode::NOINPUT);
+            }
+            _ => panic!("Unexpected error when loading private_key file!"),
+        },
+    };
+    let vaultfile = load_existing_vaultfile(vaultfile_path);
+    match vaultfile.read_secret(secret_name, private_key) {
+        Ok(secret_value) => {
+            if cli_call.is_present("no-eol") {
+                print!("{}", secret_value);
+            } else {
+                println!("{}", secret_value);
+            }
+        }
+        Err(error) => {
+            panic!(
+                "Unexpected error when reading secret value from vaultfile: {:?}",
+                error
+            );
+        }
+    }
+}
+
 fn main() {
     let username = get_username();
     let cli_call = App::new("vaultfile")
@@ -469,7 +507,7 @@ fn main() {
                 .short("f")
                 .takes_value(true)
                 .required(true)
-                .help("The path to the vaultfile to use.")
+                .help("The path of the vaultfile to use.")
             )
         )
         .subcommand(
@@ -481,7 +519,7 @@ fn main() {
                 .short("f")
                 .takes_value(true)
                 .required(true)
-                .help("The path to the vaultfile to use.")
+                .help("The path of the vaultfile to use.")
             )
             .arg(
                 Arg::with_name("key-name")
@@ -500,7 +538,7 @@ fn main() {
                 .short("f")
                 .takes_value(true)
                 .required(true)
-                .help("The path to the vaultfile to use.")
+                .help("The path of the vaultfile to use.")
             )
             .arg(
                 Arg::with_name("key-name")
@@ -519,7 +557,7 @@ fn main() {
                 .short("f")
                 .takes_value(true)
                 .required(true)
-                .help("The path to the vaultfile to store the new secret in.")
+                .help("The path of the vaultfile to store the new secret in.")
             )
             .arg(
                 Arg::with_name("name")
@@ -543,6 +581,49 @@ fn main() {
                 .takes_value(true)
                 .required_unless("value")
                 .help("The secret value to store in the vaultfile, encoded as a base64 string. This is useful for storing binary-sensitive data in a reliable way, or data that is difficult to escape for inclusion in a shell command.")
+            )
+        )
+        .subcommand(
+            SubCommand::with_name("read-secret")
+            .about("Read a secret saved in the vaultfile.")
+            .arg(
+                Arg::with_name("file")
+                .long("file")
+                .short("f")
+                .takes_value(true)
+                .required(true)
+                .help("The path of the vaultfile to store the new secret in.")
+            )
+            .arg(
+                Arg::with_name("name")
+                .long("name")
+                .short("n")
+                .takes_value(true)
+                .required(true)
+                .help("The name of the secret to read.")
+            )
+            .arg(
+                Arg::with_name("key-name")
+                .long("key-name")
+                .short("k")
+                .takes_value(true)
+                .conflicts_with("key-file")
+                .default_value(&username)
+                .help("The name of the private key to use to read the secret (it does not need to be registered under the same name in the vaultfile).")
+                .long_help("The name of the private key to use to read the secret (it does not need to be registered under the same name in the vaultfile). It must be present as <key_name>.key under the .vaultfile directory in your home directory, and must be registered in the vaultfile.")
+            )
+            .arg(
+                Arg::with_name("key-file")
+                .long("key-file")
+                .takes_value(true)
+                .conflicts_with("key-name")
+                .help("A file containing a private key which can access secrets in the vaultfile.")
+            )
+            .arg(
+                Arg::with_name("no-eol")
+                .long("no-eol")
+                .takes_value(false)
+                .help("Set this option to not print an end-of-line character after printing the secret value.")
             )
         )
         .get_matches_safe();
@@ -571,6 +652,8 @@ fn main() {
         deregister_key_command(cli_call);
     } else if let Some(cli_call) = cli_call.subcommand_matches("add-secret") {
         add_secret_command(cli_call);
+    } else if let Some(cli_call) = cli_call.subcommand_matches("read-secret") {
+        read_secret_command(cli_call);
     }
     exit(exitcode::OK);
 }

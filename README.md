@@ -44,6 +44,17 @@ The default private key filename is `$USER.key` (along with the public key `$USE
 
 ## Usage
 
+To see a help message, you can invoke:
+
+    ./vaultfile --help
+
+for the basic binary, as well as for any of the subcommands:
+
+    ./vaultfile generate-key --help
+    ./vaultfile read-secret --help
+
+In any case, the usage cases are detailed below:
+
 ### Generate a new keypair
 To generate a new private/public keypair (necessary when running `vaultfile` for the first time), the `generate-key` subcommand should be issued. The following usages are possible:
 
@@ -118,12 +129,18 @@ The second option exists to input information that is difficult to encode/escape
 
 Notice that a secret can be added to the vaultfile without being in possession of any of the access keys. This is because the secret is encrypted with the public keys registered in the file and will afterwards only be readable by someone who possesses the private key that corresponds to that public key.
 
-#### Read a secret from the vaultfile.
+#### Read a secret from the vaultfile
 To read a secret from the vaultfile, the following command can be used:
 
-    vaultfile read-secret --file secret_file.vault --read <SECRET_NAME> [--key <KEY_NAME>> | --key-file <KEY_FILE>]
+    vaultfile read-secret --file secret_file.vault --name <SECRET_NAME> [--key-name <KEY_NAME>> | --key-file <KEY_FILE>] [--no-eol]
 
-the result will be printed out to standard out.
+The result will be printed out to `stdout`.
+
+You must be in possession of a private key corresponding to **one** of the public keys registered in the file, to be able to read the secret value.
+
+If `--key-name` is provided, the private key will be assumed to be at `$HOME/.vaultfile/PROVIDED_KEY_NAME.key`. If `--key-file` is provided, the value will be assumed to be a relative (or absolute) path to the private key file. If neither is provided, then the key will be assumed to be at `$HOME/.vaultfile/$USER.key`. In all cases, `$HOME` will fallback to `%USERPROFILE%` and `$USER` to `%USERNAME%` on Windows enironments (Cygwin environments, which have these variables defined, will work normally).
+
+If you do not wish an end-of-line character to be printed after the secret value, add the flag `--no-eol` to the command invocation.
 
 ## Return codes
 The standard BSD preferred exit codes were followed. [More information can be found here.](https://www.freebsd.org/cgi/man.cgi?query=sysexits&apropos=0&sektion=0&manpath=FreeBSD+11.2-stable&arch=default&format=html)
