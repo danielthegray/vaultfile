@@ -252,6 +252,16 @@ impl Vaultfile {
         decrypt_secret(&secret_name, &encrypted_secret, &aes_key)
     }
 
+    pub fn delete_secret(&mut self, secret_name: &str) -> Result<(), VaultfileError> {
+        if !self.secrets.contains_key(secret_name) {
+            return Err(VaultfileError {
+                kind: VaultfileErrorKind::SecretNotFound(String::from(secret_name)),
+            });
+        }
+        self.secrets.remove(secret_name);
+        Ok(())
+    }
+
     pub fn save_to_file(&self, vaultfile_path: &str) -> Result<(), VaultfileError> {
         let vaultfile_json = serde_json::to_string_pretty(&self)?;
         write_json_to_file(vaultfile_path, vaultfile_json, true)?;

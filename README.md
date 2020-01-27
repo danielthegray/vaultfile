@@ -140,6 +140,14 @@ If `--key-name` is provided, the private key will be assumed to be at `$HOME/.va
 
 If you do not wish an end-of-line character to be printed after the secret value, add the flag `--no-eol` to the command invocation.
 
+#### Delete a secret from the vaultfile
+
+To delete a secret from the vaultfile, the following command can be used:
+
+    vaultfile delete-secret --file secret_file.vault --name <SECRET_NAME>
+
+This will remove the secret named SECRET_NAME from the vaultfile. No keys will be asked for. Since it's just a JSON file modification, this operation could also easily be performed manually, so it makes no sense to add artificial restrictions to this subcommand.
+
 ## Return codes
 The standard BSD preferred exit codes were followed. [More information can be found here.](https://www.freebsd.org/cgi/man.cgi?query=sysexits&apropos=0&sektion=0&manpath=FreeBSD+11.2-stable&arch=default&format=html)
 

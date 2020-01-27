@@ -418,6 +418,24 @@ fn read_secret_command(cli_call: &ArgMatches) {
     }
 }
 
+fn delete_secret_command(cli_call: &ArgMatches) {
+    let vaultfile_path = cli_call.value_of("file").unwrap();
+    let secret_name = cli_call.value_of("name").unwrap();
+    let mut vaultfile = load_existing_vaultfile(vaultfile_path);
+    vaultfile
+        .delete_secret(secret_name)
+        .unwrap_or_else(|error| {
+            eprintln!("No secret found with name '{}'!", secret_name);
+            exit(exitcode::DATAERR);
+        });
+    vaultfile
+        .save_to_file(vaultfile_path)
+        .unwrap_or_else(|error| {
+            eprintln!("Unexpected error while saving vaultfile! {:?}", error);
+            exit(exitcode::IOERR);
+        });
+}
+
 fn main() {
     let username = get_username();
     let cli_call = App::new("vaultfile")
@@ -643,6 +661,26 @@ fn main() {
                 .help("Set this option to not print an end-of-line character after printing the secret value.")
             )
         )
+        .subcommand(
+            SubCommand::with_name("delete-secret")
+            .about("Delete a secret from the specified vaultfile.")
+            .arg(
+                Arg::with_name("file")
+                .long("file")
+                .short("f")
+                .takes_value(true)
+                .required(true)
+                .help("The vaultfile to delete the secret from.")
+            )
+            .arg(
+                Arg::with_name("name")
+                .long("name")
+                .short("n")
+                .takes_value(true)
+                .required(true)
+                .help("The name of the secret to delete from the vaultfile.")
+            )
+        )
         .get_matches_safe();
 
     let cli_call = match cli_call {
@@ -671,6 +709,8 @@ fn main() {
         add_secret_command(cli_call);
     } else if let Some(cli_call) = cli_call.subcommand_matches("read-secret") {
         read_secret_command(cli_call);
+    } else if let Some(cli_call) = cli_call.subcommand_matches("delete-secret") {
+        delete_secret_command(cli_call);
     }
     exit(exitcode::OK);
 }
