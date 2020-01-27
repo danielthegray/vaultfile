@@ -1,7 +1,5 @@
 # `vaultfile` - A basic shared secret manager
 
-**NOTE: This is simply the description of the current idea. It has not been fully implemented yet, and is subject to change. Everything is still a work in progress!!**
-
 Many times, programs need to contain within their source a set of shared secrets.
 More often then not, they're stored in plain-text, just because nothing out there is convenient enough to use.
 
