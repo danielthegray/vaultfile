@@ -35,7 +35,12 @@ fn get_username() -> String {
 }
 
 fn get_default_vaultfile_folder() -> String {
-    format!("{}/.vaultfile", &get_home_directory())
+    String::from(
+        Path::new(&get_home_directory())
+            .join(".vaultfile")
+            .to_str()
+            .expect("Invalid home directory!"),
+    )
 }
 
 fn ensure_vaultfile_folder_exists() {
@@ -123,17 +128,19 @@ fn generate_key_command(cli_call: &ArgMatches) {
         String::from(cli_call.value_of("key-path").unwrap())
     } else if cli_call.is_present("key-name") {
         ensure_vaultfile_folder_exists();
-        format!(
-            "{}/{}.key",
-            &get_default_vaultfile_folder(),
-            &cli_call.value_of("key-name").unwrap()
+        String::from(
+            Path::new(&get_default_vaultfile_folder())
+                .join(format!("{}.key", &cli_call.value_of("key-name").unwrap()))
+                .to_str()
+                .expect("Invalid home directory!"),
         )
     } else {
         ensure_vaultfile_folder_exists();
-        format!(
-            "{}/{}.key",
-            &get_default_vaultfile_folder(),
-            &get_username()
+        String::from(
+            Path::new(&get_default_vaultfile_folder())
+                .join(format!("{}.key", &get_username()))
+                .to_str()
+                .expect("Invalid home directory!"),
         )
     };
     if !cli_call.is_present("overwrite-yes") {
@@ -178,10 +185,14 @@ fn register_key_command(cli_call: &ArgMatches) {
         },
     };
     // there will always be at least a default value
-    let private_key_path = format!(
-        "{}/{}.key",
-        get_default_vaultfile_folder(),
-        cli_call.value_of("private-key-name").unwrap()
+    let private_key_path = String::from(
+        Path::new(&get_default_vaultfile_folder())
+            .join(format!(
+                "{}.key",
+                cli_call.value_of("private-key-name").unwrap()
+            ))
+            .to_str()
+            .expect(&format!("Invalid path {}", &get_default_vaultfile_folder())),
     );
     let private_key = match load_private_key(&private_key_path) {
         Ok(priv_key) => Some(priv_key),
@@ -371,7 +382,12 @@ fn read_secret_command(cli_call: &ArgMatches) {
         Some(key_path) => String::from(key_path),
         None => {
             let key_name = cli_call.value_of("key-name").unwrap();
-            format!("{}/{}.key", &get_default_vaultfile_folder(), &key_name)
+            String::from(
+                Path::new(&get_default_vaultfile_folder())
+                    .join(format!("{}.key", &key_name))
+                    .to_str()
+                    .expect(&format!("Invalid path {}", &get_default_vaultfile_folder())),
+            )
         }
     };
     let private_key = match load_private_key(&private_key_path) {

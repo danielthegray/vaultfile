@@ -61,11 +61,11 @@ impl Vaultfile {
         let public_key = private_key.to_public_key();
         let private_key_json = serde_json::to_string(&private_key).unwrap();
         let public_key_json = serde_json::to_string(&public_key).unwrap();
-        match write_json_to_file(private_key_path, private_key_json, false) {
+        match write_json_to_file(private_key_path, private_key_json, true) {
             Ok(_) => (),
-            Err(error) => panic!(error),
+            Err(error) => panic!("{}", error),
         };
-        match write_json_to_file(&public_key_path, public_key_json, false) {
+        match write_json_to_file(&public_key_path, public_key_json, true) {
             Ok(_) => Ok(()),
             Err(error) => panic!(error),
         }
