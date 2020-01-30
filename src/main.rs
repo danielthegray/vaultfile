@@ -109,14 +109,37 @@ fn check_file_overwrite(file_to_check: &str, overwrite_no: bool) {
     }
 }
 
+fn load_or_create_vaultfile(vaultfile_path: &str) -> Vaultfile {
+    load_vaultfile(vaultfile_path, false)
+}
+
 fn load_existing_vaultfile(vaultfile_path: &str) -> Vaultfile {
+    load_vaultfile(vaultfile_path, true)
+}
+
+fn load_vaultfile(vaultfile_path: &str, must_exist: bool) -> Vaultfile {
     match Vaultfile::load_from_file(vaultfile_path) {
         Ok(vaultfile) => vaultfile,
         Err(error) => match error.kind {
             VaultfileErrorKind::VaultfileNotFound => {
-                eprintln!("No vaultfile found at {}!", vaultfile_path);
-                exit(exitcode::NOINPUT);
-            }
+                if must_exist {
+                    eprintln!("No vaultfile found at {}!", vaultfile_path);
+                    exit(exitcode::NOINPUT);
+                }
+                Vaultfile::new()
+            },
+            VaultfileErrorKind::InvalidJson(json_error) => {
+                eprintln!("Malformed/corrupt vaultfile! Error: {:?}", json_error);
+                exit(exitcode::DATAERR);
+            },
+            VaultfileErrorKind::VaultfileMustHaveKeys => {
+                eprintln!("Malformed/corrupt vaultfile! It has no registered keys!");
+                exit(exitcode::DATAERR);
+            },
+            VaultfileErrorKind::SecretNotSharedWithAllRegisteredKeys(secret_name) => {
+                eprintln!("Malformed/corrupt vaultfile! Secret {} is not shared with all registered keys!", secret_name);
+                exit(exitcode::DATAERR);
+            },
             _ => panic!("Unexpected error! {:?}", error),
         },
     }
@@ -227,13 +250,7 @@ fn register_key_command(cli_call: &ArgMatches) {
             err_kind => panic!("Unexpected error! {:?}", err_kind),
         },
     };
-    let mut vaultfile = match Vaultfile::load_from_file(&vaultfile_path) {
-        Ok(vault) => vault,
-        Err(error) => match error.kind {
-            VaultfileErrorKind::VaultfileNotFound => Vaultfile::new(),
-            _ => panic!("Bad Vaultfile!"),
-        },
-    };
+    let mut vaultfile = load_or_create_vaultfile(&vaultfile_path);
     if !cli_call.is_present("overwrite-yes") {
         if vaultfile.is_key_registered(key_name) {
             if cli_call.is_present("overwrite-no") {
@@ -609,7 +626,7 @@ fn main() {
                 .long("value")
                 .short("v")
                 .takes_value(true)
-                .required_unless("value-base64")
+                .required_unless("base64-value")
                 .help("The secret value to store in the vaultfile (assumed to be a utf8-encoded string).")
             )
             .arg(

@@ -50,7 +50,33 @@ impl Vaultfile {
         }
         let vaultfile_json = load_json_from_file(vaultfile_path)?;
         let vaultfile: Vaultfile = serde_json::from_str(&vaultfile_json)?;
+        vaultfile.validate()?;
         Ok(vaultfile)
+    }
+
+    fn validate(&self) -> Result<(), VaultfileError> {
+        if self.keys.len() == 0 {
+            return Err(VaultfileError {
+                kind: VaultfileErrorKind::VaultfileMustHaveKeys,
+            });
+        }
+        // we ensure that all registered keys can access all of the secrets in the vaultfile
+        for registered_key_name in self.keys.keys() {
+            for (secret_name, secret) in self.secrets.iter() {
+                let key_can_access_secret = secret
+                    .encrypted_key
+                    .keys()
+                    .any(|key_name_in_secret| registered_key_name == key_name_in_secret);
+                if !key_can_access_secret {
+                    return Err(VaultfileError {
+                        kind: VaultfileErrorKind::SecretNotSharedWithAllRegisteredKeys(
+                            String::from(secret_name),
+                        ),
+                    });
+                }
+            }
+        }
+        Ok(())
     }
 
     pub fn generate_new_key(private_key_path: &str) -> Result<(), VaultfileError> {
@@ -145,6 +171,16 @@ impl Vaultfile {
     }
 
     pub fn deregister_key(&mut self, key_name: &str) -> Result<(), VaultfileError> {
+        if self.keys.len() == 1 {
+            return Err(VaultfileError {
+                kind: VaultfileErrorKind::VaultfileMustHaveKeys,
+            });
+        }
+        if !self.keys.contains_key(key_name) {
+            return Err(VaultfileError {
+                kind: VaultfileErrorKind::VaultfileKeyNotRegistered(String::from(key_name)),
+            });
+        }
         for (_secret_name, secret) in self.secrets.iter_mut() {
             secret.encrypted_key.remove(key_name);
         }
@@ -458,12 +494,13 @@ pub enum VaultfileErrorKind {
     PrivateKeyNotRegistered,
 
     // Malformed vaultfile JSON errors:
-
-    // the secret with the name specified does not have
-    // an encrypted_key entry for all the keys registered in
-    // the vaultfile (the String parameter will have the secret name)
+    /// The secret with the name specified does not have
+    /// an encrypted_key entry for all the keys registered in the vaultfile
+    /// (the String parameter will have the name of the offending secret)
     SecretNotSharedWithAllRegisteredKeys(String),
 
+    VaultfileMustHaveKeys,
+    VaultfileKeyNotRegistered(String),
     BadBase64String(String),
     BadBase64Secret(String),
     SecretNotFound(String),
