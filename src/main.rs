@@ -444,8 +444,13 @@ fn delete_secret_command(cli_call: &ArgMatches) {
     vaultfile
         .delete_secret(secret_name)
         .unwrap_or_else(|error| {
-            eprintln!("No secret found with name '{}'!", secret_name);
-            exit(exitcode::DATAERR);
+            match error.kind {
+                VaultfileErrorKind::SecretNotFound(_sec_name) => {
+                    eprintln!("No secret found with name '{}'!", secret_name);
+                    exit(exitcode::DATAERR);
+                },
+                _ => panic!("Unexpected error! {:?}", error),
+            }
         });
     vaultfile
         .save_to_file(vaultfile_path)
