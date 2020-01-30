@@ -18,27 +18,60 @@ With `vaultfile` I wanted to take a simpler approach. The core ideas are listed 
 
 The vaultfile is a serialized JSON file with the following sections:
 - A list of public keys that are granted access to the shared secrets.
+    - These keys are simple JSON serializations of the Rust `RSAPublicKey` struct, so they are just JSON objects as well (not PEM, etc.)
 - A list of shared secrets. Each shared secret contains:
-    - the secret, encrypted with a symmetric key, serialized as a Base64 string.
-    - a list of encrypted strings, which are obtained by encrypting the symmetric key from the previous point with all of the different public keys that are granted access to the shared secret.
+    - the **secret**, encrypted with a symmetric key, serialized as a Base64 string.
+    - the **encrypted symmetric key**, itself encrypted with all of the public keys registered in the vaultfile. **Any secret should have an entry here for _each and every_ public key registered in the vaultfile.**
 
-In the examples it is shown with a `.vault` extension, but this is merely a suggestion. Any file extension will be accepted by the tool without complaints as long as it is a readable file.
-
-### Addition of a key to the vaultfile
-To register a new key in the vaultfile, the person must have a private key corresponding to one of the public keys, since part of the process will be to re-encrypt all of the secrets of the file with the newly added public key.
-
-### Removal of a key (revocation of access)
-In its simplest form, it would consist of removal of the key from the list of registered key, as well as all of the encrypted values for that key.
-
-However, as stated earlier, this could still mean that the person has a copy of the previously encrypted secret. The best way to fully "revoke" the secret is to change the secret value (password, API key, etc.), which would involve re-encrypting the value with all of the keys that still have access.
-
-Ideally, the users would always be reading the shared secret from the vaultfile directly, so the change, once the effective value is changed, should be transparent for everyone.
+In the examples it is shown with a `.vault` extension, but this is merely a suggestion. Any file extension will be accepted by the tool without complaints as long as it is a readable vaultfile.
 
 ### Private/public key storage
 
 Vaultfile private/public keys can be generated/stored anywhere. However, by default, they will be stored in the users `$HOME` directory, under `$HOME/.vaultfile/`. For Windows environments where `$HOME` is not defined, Vaultfile will fallback onto the `%USERPROFILE%` environment variable.
 
 The default private key filename is `$USER.key` (along with the public key `$USER.key.pub`). On Windows environments where `$USER` is not defined, Vaultfile will fallback onto `%USERNAME%`.
+
+### Workflow
+First, create your private/public keypair, with vaultfile itself (more options in the Usage section):
+
+    vaultfile generate-key
+
+This command will create a key under `$HOME/.vaultfile/$USER.key` (and `$USER.key.pub` at the same location) (or `%USERPROFILE%/.vaultfile/%USERNAME%.key` on Windows)
+
+To create a new vaultfile, use the register-key, and register the key you have just created:
+
+    vaultfile register-key --file my_vaultfile.vault --key-name=$USER --key-file=$HOME/.vaultfile/$USER.key.pub
+
+ Even if you specify the private key in this step (instead of the public key), only the public part will be saved in the vaultfile, so it's not a big deal to specify either one. The main reason of having the public file as well is for convenience.
+
+Other/new keys can be registered without possessing a private key as long as the file contains no secrets. Once a secret has been added to the vaultfile, the person must have a private key corresponding to one of the public keys, since part of the process will be to re-encrypt all of the secrets of the file with the newly added public key.
+
+### Adding a secret (password, API key, etc.)
+When you're ready to add a secret value to the vaultfile, execute:
+
+    vaultfile add-secret --file my_vaultfile.vault --name aws_key --value ABCDEFG1234567890
+
+You can also pass in a Base64-encoded value with --base64-value, which will be decoded before storing the value.
+
+### Reading a secret
+You can read a secret from the vaultfile if you possess a private key which corresponds to one of the public keys registered in the vaultfile. If you have your private key stored in the default location, then it's simply a matter of executing:
+
+    vaultfile read-secret -f my_vaultfile.vault -n aws_key
+
+Note that for this example, the short forms of the arguments `--name` and `--file` were used. To see which arguments have short forms and what they are, you can always invoke `--help`.
+
+The secret will be printed out to `stdout`. This allows easy integration with other tools. It shouldn't be hard to develop a library for other languages which can read/write vaultfiles as well.
+
+### Removal of a key (revocation of access)
+In its simplest form, it would consist of removal of the key from the list of registered keys, as well as all of the encrypted values for that key. To perform this action, execute:
+
+    vaultfile deregister-key --file my_vaultfile.vault --key-name $user
+
+However, as stated earlier, this could still mean that the person has a copy of the previously encrypted secret. The best way to fully "revoke" the secret is to change the secret value after de-registering the key, which will share this new value only with the registered keys.
+
+Ideally, the users would always be reading the shared secret from the vaultfile directly, so the change, once the effective value is changed, should be transparent for everyone.
+
+Note that you cannot de-register the last key from the vaultfile (it must have at least one key registered).
 
 ## Usage
 
@@ -68,7 +101,7 @@ Finally, the `--key-path` option is for when you just want to generate the priva
 
 If the private or public key file exists, it will ask you if you want to overwrite it. To prevent the prompt from appearing, you can simply add `-y`/`--yes` or `-n`/`--no` to answer the question by default.
 
-**NOTE: The private key file should probably be set to be accesible only by you (`chmod 600`). However, since this is meant as a cross-platform tool, no UNIX permission scheme can be assumed, which leaves the protection of your private key entirely up to you.**
+**NOTE:** The private key file should probably be set to be accessible only by you (`chmod 600`), or even better, set to read-only (with `chmod 400`) to prevent accidental damage/removal of the key (if you really want to remove it you can always `chmod` it back). However, since this is meant as a cross-platform tool, no UNIX permission scheme can be assumed, which leaves the protection of your private key entirely up to you.
 
 ### User/key management
 #### Vaultfile creation & key/user registration
@@ -79,7 +112,7 @@ The `register-key` subcommand can register a new public key in the vaultfile (if
 
 The `<KEY_NAME>` string should be name you wish the key to have in the vaultfile. Normally it should be something like a username, or something else unique to you (so that other uses of the vaultfile will know who the key belongs to).
 
-A public key can be added as a file (first option) or as a JSON string (second option).
+A public key can be added as a file (first option) or as a JSON string (second option), which could be obtained from another vaultfile (i.e. using the `show-key` subcommand to extract the JSON string for a specific public key) or easily copied from a chat log.
 
 If a key with that name already exists in the vaultfile, a confirmation warning will appearing asking if it's OK to overwrite the key (can be overwritten without confirmation if the `-y` flag is added).
 
@@ -136,7 +169,7 @@ The result will be printed out to `stdout`.
 
 You must be in possession of a private key corresponding to **one** of the public keys registered in the file, to be able to read the secret value.
 
-If `--key-name` is provided, the private key will be assumed to be at `$HOME/.vaultfile/PROVIDED_KEY_NAME.key`. If `--key-file` is provided, the value will be assumed to be a relative (or absolute) path to the private key file. If neither is provided, then the key will be assumed to be at `$HOME/.vaultfile/$USER.key`. In all cases, `$HOME` will fallback to `%USERPROFILE%` and `$USER` to `%USERNAME%` on Windows enironments (Cygwin environments, which have these variables defined, will work normally).
+If `--key-name` is provided, the private key will be assumed to be at `$HOME/.vaultfile/PROVIDED_KEY_NAME.key`. If `--key-file` is provided, the value will be assumed to be a relative (or absolute) path to the private key file. If neither is provided, then the key will be assumed to be at `$HOME/.vaultfile/$USER.key`. In all cases, `$HOME` will fallback to `%USERPROFILE%` and `$USER` to `%USERNAME%` on Windows environments (Cygwin environments, which have these variables defined, will work normally).
 
 If you do not wish an end-of-line character to be printed after the secret value, add the flag `--no-eol` to the command invocation.
 

@@ -167,6 +167,8 @@ fn generate_key_command(cli_call: &ArgMatches) {
     if cfg!(unix) {
         println!("It is recommended that you make it accessible only for you, with the following command:");
         println!("$ chmod 600 {}", key_path);
+        println!("It would be even better if you made it read-only (to prevent accidental deletion), with:");
+        println!("$ chmod 400 {}", key_path);
     }
 }
 
