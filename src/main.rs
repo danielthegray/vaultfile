@@ -35,11 +35,20 @@ fn get_username() -> String {
 }
 
 fn get_default_vaultfile_folder() -> String {
+    let xdg_config_home = match std::env::var("XDG_CONFIG_HOME") {
+        Ok(xdg_config_home) => xdg_config_home,
+        Err(_) => String::from(
+            Path::new(&get_home_directory())
+                .join(".config")
+                .to_str()
+                .expect("Error while creating vaultfile path!"),
+        ),
+    };
     String::from(
-        Path::new(&get_home_directory())
-            .join(".vaultfile")
+        Path::new(&xdg_config_home)
+            .join("vaultfile")
             .to_str()
-            .expect("Invalid home directory!"),
+            .expect("Error while creating vaultfile path!"),
     )
 }
 
@@ -56,10 +65,13 @@ fn ensure_vaultfile_folder_exists() {
         );
         exit(exitcode::CANTCREAT);
     }
-    match std::fs::create_dir(&vaultfile_folder_path) {
+    match std::fs::create_dir_all(&vaultfile_folder_path) {
         Ok(_) => (),
         Err(error) => {
-            eprintln!("Error while creating .vaultfile folder: {:?}", error);
+            eprintln!(
+                "Error while creating {} folder: {:?}",
+                vaultfile_folder_path, error
+            );
             exit(exitcode::CANTCREAT);
         }
     };
@@ -127,19 +139,19 @@ fn load_vaultfile(vaultfile_path: &str, must_exist: bool) -> Vaultfile {
                     exit(exitcode::NOINPUT);
                 }
                 Vaultfile::new()
-            },
+            }
             VaultfileErrorKind::InvalidJson(json_error) => {
                 eprintln!("Malformed/corrupt vaultfile! Error: {:?}", json_error);
                 exit(exitcode::DATAERR);
-            },
+            }
             VaultfileErrorKind::VaultfileMustHaveKeys => {
                 eprintln!("Malformed/corrupt vaultfile! It has no registered keys!");
                 exit(exitcode::DATAERR);
-            },
+            }
             VaultfileErrorKind::SecretNotSharedWithAllRegisteredKeys(secret_name) => {
                 eprintln!("Malformed/corrupt vaultfile! Secret {} is not shared with all registered keys!", secret_name);
                 exit(exitcode::DATAERR);
-            },
+            }
             _ => panic!("Unexpected error! {:?}", error),
         },
     }
@@ -443,14 +455,12 @@ fn delete_secret_command(cli_call: &ArgMatches) {
     let mut vaultfile = load_existing_vaultfile(vaultfile_path);
     vaultfile
         .delete_secret(secret_name)
-        .unwrap_or_else(|error| {
-            match error.kind {
-                VaultfileErrorKind::SecretNotFound(_sec_name) => {
-                    eprintln!("No secret found with name '{}'!", secret_name);
-                    exit(exitcode::DATAERR);
-                },
-                _ => panic!("Unexpected error! {:?}", error),
+        .unwrap_or_else(|error| match error.kind {
+            VaultfileErrorKind::SecretNotFound(_sec_name) => {
+                eprintln!("No secret found with name '{}'!", secret_name);
+                exit(exitcode::DATAERR);
             }
+            _ => panic!("Unexpected error! {:?}", error),
         });
     vaultfile
         .save_to_file(vaultfile_path)
@@ -463,9 +473,9 @@ fn delete_secret_command(cli_call: &ArgMatches) {
 fn main() {
     let username = get_username();
     let cli_call = App::new("vaultfile")
-        .version("0.1.0")
-        .author("Daniel Gray")
-        .about("A basic shared secret/credential manager")
+        .version(env!("CARGO_PKG_VERSION"))
+        .author(env!("CARGO_PKG_AUTHORS"))
+        .about(env!("CARGO_PKG_DESCRIPTION"))
         .setting(AppSettings::ArgRequiredElseHelp)
         .subcommand(
             SubCommand::with_name("generate-key")
@@ -476,7 +486,8 @@ fn main() {
                         .takes_value(true)
                         .conflicts_with("key-path")
                         .help(
-                            "Name of the keyfile to generate under ~/.vaultfile (your username will be used by default)",
+                            &format!("Name of the keyfile to generate under {} (your username will be used by default)",
+                                get_default_vaultfile_folder())
                         ),
                 )
                 .arg(
@@ -669,7 +680,9 @@ fn main() {
                 .conflicts_with("key-file")
                 .default_value(&username)
                 .help("The name of the private key to use to read the secret (it does not need to be registered under the same name in the vaultfile).")
-                .long_help("The name of the private key to use to read the secret (it does not need to be registered under the same name in the vaultfile). It must be present as <key_name>.key under the .vaultfile directory in your home directory, and must be registered in the vaultfile.")
+                .long_help(&format!("The name of the private key to use to read the secret (it does not need to be registered under the same name in the vaultfile).
+                    It must be present as <key_name>.key under the {} directory in your home directory, and must be registered in the vaultfile.",
+                    get_default_vaultfile_folder()))
             )
             .arg(
                 Arg::with_name("key-file")
