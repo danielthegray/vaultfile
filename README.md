@@ -27,7 +27,7 @@ In the examples it is shown with a `.vault` extension, but this is merely a sugg
 
 ### Private/public key storage
 
-Vaultfile private/public keys can be generated/stored anywhere. However, by default, they will be stored in the users `$HOME` directory, under `$HOME/.vaultfile/`. For Windows environments where `$HOME` is not defined, Vaultfile will fallback onto the `%USERPROFILE%` environment variable.
+Vaultfile private/public keys can be generated/stored anywhere. However, by default, they will be stored in the users `$HOME` directory, under `$HOME/.config/vaultfile/`. For Windows environments where `$HOME` is not defined, Vaultfile will fallback onto the `%USERPROFILE%` environment variable.
 
 The default private key filename is `$USER.key` (along with the public key `$USER.key.pub`). On Windows environments where `$USER` is not defined, Vaultfile will fallback onto `%USERNAME%`.
 
@@ -36,11 +36,11 @@ First, create your private/public keypair, with vaultfile itself (more options i
 
     vaultfile generate-key
 
-This command will create a key under `$HOME/.vaultfile/$USER.key` (and `$USER.key.pub` at the same location) (or `%USERPROFILE%/.vaultfile/%USERNAME%.key` on Windows)
+This command will create a key under `$HOME/.config/vaultfile/$USER.key` (and `$USER.key.pub` at the same location) (or `%USERPROFILE%/.config/vaultfile/%USERNAME%.key` on Windows)
 
 To create a new vaultfile, use the register-key, and register the key you have just created:
 
-    vaultfile register-key --file my_vaultfile.vault --key-name=$USER --key-file=$HOME/.vaultfile/$USER.key.pub
+    vaultfile register-key --file my_vaultfile.vault --key-name=$USER --key-file=$HOME/.config/vaultfile/$USER.key.pub
 
  Even if you specify the private key in this step (instead of the public key), only the public part will be saved in the vaultfile, so it's not a big deal to specify either one. The main reason of having the public file as well is for convenience.
 
@@ -121,7 +121,7 @@ If the vaultfile already contains secrets, there is one more element needed to r
 
 The reason is simple: any newly added key needs to gain access to all the secrets contained in the vaultfile (by design). Therefore, to register a new key, you need to be able to read all of the vaultfile's secrets, to re-encrypt them with the newly registered public key, thereby granting access to the new trusted party.
 
-The parameter to specify this is `--private-key-name`, which should be the name of a file under the `~/.vaultfile` directory (or `%USERPROFILE%\.vaultfile` on Windows), with a `.key` extension (i.e. `--private-key-name mithrandir` will open the file `~/.vaultfile/mithrandir.key`). Usage template:
+The parameter to specify this is `--private-key-name`, which should be the name of a file under the `~/.config/vaultfile` directory (or `%USERPROFILE%\.config/vaultfile` on Windows), with a `.key` extension (i.e. `--private-key-name mithrandir` will open the file `~/.config/vaultfile/mithrandir.key`). Usage template:
 
     vaultfile register-key -f secret_file.vault --key-name=<KEY_NAME> --key-file=<PATH_TO_PUBLIC_KEY_FILE> --private--key-name=<PRIVATE_KEY_NAME>
     vaultfile register-key -f secret_file.vault --key-name=<KEY_NAME> --key-json=<PUBLIC_KEY_JSON_STRING> --private-key-name=<PRIVATE_KEY_NAME>
@@ -160,6 +160,14 @@ The second option exists to input information that is difficult to encode/escape
 
 Notice that a secret can be added to the vaultfile without being in possession of any of the access keys. This is because the secret is encrypted with the public keys registered in the file and will afterwards only be readable by someone who possesses the private key that corresponds to that public key.
 
+#### Listing of the secrets stored in the vaultfile
+
+List the keys registered in the vaultfile:
+
+    vaultfile list-secrets --file secret_file.vault
+
+Will output a list of names of the secrets that are stored in the vaultfile.
+
 #### Read a secret from the vaultfile
 To read a secret from the vaultfile, the following command can be used:
 
@@ -169,7 +177,7 @@ The result will be printed out to `stdout`.
 
 You must be in possession of a private key corresponding to **one** of the public keys registered in the file, to be able to read the secret value.
 
-If `--key-name` is provided, the private key will be assumed to be at `$HOME/.vaultfile/PROVIDED_KEY_NAME.key`. If `--key-file` is provided, the value will be assumed to be a relative (or absolute) path to the private key file. If neither is provided, then the key will be assumed to be at `$HOME/.vaultfile/$USER.key`. In all cases, `$HOME` will fallback to `%USERPROFILE%` and `$USER` to `%USERNAME%` on Windows environments (Cygwin environments, which have these variables defined, will work normally).
+If `--key-name` is provided, the private key will be assumed to be at `$HOME/.config/vaultfile/PROVIDED_KEY_NAME.key`. If `--key-file` is provided, the value will be assumed to be a relative (or absolute) path to the private key file. If neither is provided, then the key will be assumed to be at `$HOME/.config/vaultfile/$USER.key`. In all cases, `$HOME` will fallback to `%USERPROFILE%` and `$USER` to `%USERNAME%` on Windows environments (Cygwin environments, which have these variables defined, will work normally).
 
 If you do not wish an end-of-line character to be printed after the secret value, add the flag `--no-eol` to the command invocation.
 
