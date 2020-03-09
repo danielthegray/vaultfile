@@ -192,6 +192,10 @@ impl Vaultfile {
         Vec::from_iter(self.keys.keys().map(|key_name| String::from(key_name)))
     }
 
+    pub fn list_secrets(&self) -> Vec<String> {
+        Vec::from_iter(self.secrets.keys().map(|key_name| String::from(key_name)))
+    }
+
     pub fn has_secret_named(&self, secret_name: &str) -> bool {
         self.secrets.contains_key(secret_name)
     }

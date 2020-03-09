@@ -309,6 +309,14 @@ fn list_keys_command(cli_call: &ArgMatches) {
     }
 }
 
+fn list_secrets_command(cli_call: &ArgMatches) {
+    let vaultfile_path = cli_call.value_of("file").unwrap();
+    let vaultfile = load_existing_vaultfile(vaultfile_path);
+    for registered_key_name in vaultfile.list_secrets() {
+        println!("{}", registered_key_name);
+    }
+}
+
 fn show_key_command(cli_call: &ArgMatches) {
     let vaultfile_path = cli_call.value_of("file").unwrap();
     let name_of_key_to_show = cli_call.value_of("key-name").unwrap();
@@ -581,6 +589,18 @@ fn main() {
             )
         )
         .subcommand(
+            SubCommand::with_name("list-secrets")
+            .about("List all the secrets registered in the vaultfile.")
+            .arg(
+                Arg::with_name("file")
+                .long("file")
+                .short("f")
+                .takes_value(true)
+                .required(true)
+                .help("The path of the vaultfile to use.")
+            )
+        )
+        .subcommand(
             SubCommand::with_name("show-key")
             .about("Prints out the JSON-encoded public key registered in the specified vaultfile (to stdout).")
             .arg(
@@ -738,6 +758,8 @@ fn main() {
         register_key_command(cli_call);
     } else if let Some(cli_call) = cli_call.subcommand_matches("list-keys") {
         list_keys_command(cli_call);
+    } else if let Some(cli_call) = cli_call.subcommand_matches("list-secrets") {
+        list_secrets_command(cli_call);
     } else if let Some(cli_call) = cli_call.subcommand_matches("show-key") {
         show_key_command(cli_call);
     } else if let Some(cli_call) = cli_call.subcommand_matches("deregister-key") {
