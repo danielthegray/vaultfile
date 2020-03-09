@@ -1,2 +1,7 @@
 /target
 **/*.rs.bk
+*.key
+*.key.pub
+*.exe
+*.zip
+*.tar.gz
