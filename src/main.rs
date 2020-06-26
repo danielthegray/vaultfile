@@ -480,6 +480,11 @@ fn delete_secret_command(cli_call: &ArgMatches) {
 
 fn main() {
     let username = get_username();
+    let default_key_file = format!(
+        "{}/{}.key.pub",
+        get_default_vaultfile_folder(),
+        get_username()
+    );
     let cli_call = App::new("vaultfile")
         .version(env!("CARGO_PKG_VERSION"))
         .author(env!("CARGO_PKG_AUTHORS"))
@@ -522,7 +527,7 @@ fn main() {
         )
         .subcommand(
             SubCommand::with_name("register-key")
-                .about("Register a key in a vaultfile, creating the vaultfile if it does not exist.")
+                .about("Register a key in a vaultfile, creating a new vaultfile if it does not exist.")
                 .arg(
                     Arg::with_name("file")
                     .short("f")
@@ -535,6 +540,7 @@ fn main() {
                     Arg::with_name("key-name")
                     .long("key-name")
                     .takes_value(true)
+                    .default_value(&username)
                     .required(true)
                     .help("The name with which you want to register the key in the vaultfile (if it exists, it will be overwritten).")
                 )
@@ -544,6 +550,7 @@ fn main() {
                     .takes_value(true)
                     .conflicts_with("key-json")
                     .required_unless("key-json")
+                    .default_value(&default_key_file)
                     .help("The file containing the public key you wish to register in the vaultfile (path must be absolute or relative to current directory).")
                 )
                 .arg(
