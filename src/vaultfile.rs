@@ -304,8 +304,46 @@ impl Vaultfile {
 
     pub fn save_to_file(&self, vaultfile_path: &str) -> Result<(), VaultfileError> {
         let vaultfile_json = serde_json::to_string_pretty(&self)?;
+        let vaultfile_json = Vaultfile::move_keys_into_one_line(vaultfile_json);
         write_json_to_file(vaultfile_path, vaultfile_json, true)?;
         Ok(())
+    }
+
+    fn move_keys_into_one_line(ugly_vaultfile: String) -> String {
+        let vaultfile_lines = ugly_vaultfile.lines();
+        let mut pretty_vaultfile_lines: Vec<String> = Vec::with_capacity(1000);
+        let mut current_line = String::with_capacity(1000);
+        let mut inside_keys = false;
+        let mut keys_found = false;
+        let mut braces_level = 0;
+        for line in vaultfile_lines {
+            let trimmed_line = if current_line.is_empty() {
+                line.to_string()
+            } else {
+                line.trim().replace(" ", &"")
+            };
+            current_line.push_str(&trimmed_line);
+            if inside_keys {
+                if line.contains("{") {
+                    braces_level += 1;
+                }
+                if line.contains("}") {
+                    braces_level -= 1;
+                }
+                if braces_level < 0 {
+                    inside_keys = false;
+                }
+            }
+            if !inside_keys || braces_level == 0 {
+                pretty_vaultfile_lines.push(current_line);
+                current_line = String::with_capacity(1000);
+            }
+            if !keys_found && line.ends_with("\"keys\": {") {
+                inside_keys = true;
+                keys_found = true;
+            }
+        }
+        pretty_vaultfile_lines.join("\n")
     }
 }
 
