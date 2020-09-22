@@ -181,7 +181,7 @@ fn generate_key_command(cli_call: &ArgMatches) {
     if !cli_call.is_present("overwrite-yes") {
         check_file_overwrite(&key_path, cli_call.is_present("overwrite-no"));
     }
-    Vaultfile::generate_new_key(&key_path).unwrap_or_else(|error| {
+    Vaultfile::generate_and_save_key(&key_path).unwrap_or_else(|error| {
         match error.kind {
             VaultfileErrorKind::IoError(io_error) => {
                 eprintln!("I/O Error: {:?}", io_error);
@@ -245,6 +245,7 @@ fn register_key_command(cli_call: &ArgMatches) {
             _ => panic!("Error when loading specified private key!"),
         },
     };
+    let private_key = private_key.unwrap();
     let new_key = match new_key {
         Ok(public_key) => public_key,
         Err(error) => match error.kind {
@@ -281,7 +282,7 @@ fn register_key_command(cli_call: &ArgMatches) {
             }
         }
     }
-    vaultfile.register_key(&key_name, new_key, private_key).unwrap_or_else(|error| {
+    vaultfile.register_key(&key_name, new_key, &private_key).unwrap_or_else(|error| {
         match error.kind {
             VaultfileErrorKind::PrivateKeyNotRegistered => {
                 eprintln!("The private key you specified is not registered in the vaultfile! (and is therefore useless for sharing the secrets with another key/person)");
@@ -440,7 +441,7 @@ fn read_secret_command(cli_call: &ArgMatches) {
         },
     };
     let vaultfile = load_existing_vaultfile(vaultfile_path);
-    match vaultfile.read_secret(secret_name, private_key) {
+    match vaultfile.read_secret(secret_name, &private_key) {
         Ok(secret_value) => {
             if cli_call.is_present("no-eol") {
                 print!("{}", secret_value);
