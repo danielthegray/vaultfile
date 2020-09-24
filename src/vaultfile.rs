@@ -132,14 +132,15 @@ impl Vaultfile {
         already_registered_private_key: &RSAPrivateKey,
     ) -> Result<(), VaultfileError> {
         if self.secrets.len() > 0 {
-            let private_key_name = match self.find_registered_name_of_key(already_registered_private_key) {
-                Some(key_name) => key_name,
-                None => {
-                    return Err(VaultfileError {
-                        kind: VaultfileErrorKind::PrivateKeyNotRegistered,
-                    });
-                }
-            };
+            let private_key_name =
+                match self.find_registered_name_of_key(already_registered_private_key) {
+                    Some(key_name) => key_name,
+                    None => {
+                        return Err(VaultfileError {
+                            kind: VaultfileErrorKind::PrivateKeyNotRegistered,
+                        });
+                    }
+                };
             let mut rng = rand::rngs::OsRng;
             // we now grant access to all the shared secrets to the newly registered key
             for (secret_name, secret) in self.secrets.iter_mut() {
@@ -154,7 +155,8 @@ impl Vaultfile {
                     }
                 };
                 let raw_encrypted_key = base64::decode(&encrypted_key)?;
-                let raw_aes_key = already_registered_private_key.decrypt(PADDING, &raw_encrypted_key)?;
+                let raw_aes_key =
+                    already_registered_private_key.decrypt(PADDING, &raw_encrypted_key)?;
                 // we encrypt the AES key using the newly registered public key
                 // to grant them access to the secret
                 let new_encrypted = new_key.encrypt(&mut rng, PADDING, &raw_aes_key)?;
@@ -523,11 +525,15 @@ mod vaultfile_tests {
         let secret = "SECRET_VALUE_12345";
         let mut vaultfile = Vaultfile::new();
         let private_key = Vaultfile::generate_key();
-        vaultfile.register_key("test_key", private_key.to_public_key(), &private_key).unwrap();
+        vaultfile
+            .register_key("test_key", private_key.to_public_key(), &private_key)
+            .unwrap();
         vaultfile.add_secret_utf8(secret_key, secret).unwrap();
         vaultfile.save_to_file(&vault_filename).unwrap();
         let vaultfile_to_check = Vaultfile::load_from_file(&vault_filename).unwrap();
-        let recovered_secret = vaultfile_to_check.read_secret(secret_key, &private_key).unwrap();
+        let recovered_secret = vaultfile_to_check
+            .read_secret(secret_key, &private_key)
+            .unwrap();
         assert_eq!(secret, recovered_secret);
         std::fs::remove_file(vault_filename).unwrap();
     }
