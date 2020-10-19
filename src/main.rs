@@ -34,22 +34,13 @@ fn get_username() -> String {
     }
 }
 
-fn get_default_vaultfile_folder() -> String {
+fn get_default_vaultfile_folder() -> PathBuf {
     let xdg_config_home = match std::env::var("XDG_CONFIG_HOME") {
-        Ok(xdg_config_home) => xdg_config_home,
-        Err(_) => String::from(
-            Path::new(&get_home_directory())
-                .join(".config")
-                .to_str()
-                .expect("Error while creating vaultfile path!"),
-        ),
+        Ok(xdg_config_home) => Path::new(&xdg_config_home).to_path_buf(),
+        Err(_) => Path::new(&get_home_directory())
+            .join(".config"),
     };
-    String::from(
-        Path::new(&xdg_config_home)
-            .join("vaultfile")
-            .to_str()
-            .expect("Error while creating vaultfile path!"),
-    )
+    xdg_config_home.join("vaultfile")
 }
 
 fn ensure_folder_exists(folder_path: &Path) {
@@ -483,9 +474,11 @@ fn delete_secret_command(cli_call: &ArgMatches) {
 
 fn main() {
     let username = get_username();
+    let default_vaultfile_path = get_default_vaultfile_folder();
+    let default_vaultfile_folder = default_vaultfile_path.to_str().unwrap();
     let default_key_file = format!(
         "{}/{}.key.pub",
-        get_default_vaultfile_folder(),
+        default_vaultfile_folder,
         get_username()
     );
     let default_vaultfile_name = "Vaultfile";
@@ -498,21 +491,13 @@ fn main() {
             SubCommand::with_name("generate-key")
                 .about("Generate a new private key")
                 .arg(
-                    Arg::with_name("key-name")
-                        .long("key-name")
-                        .takes_value(true)
-                        .conflicts_with("key-path")
-                        .help(
-                            &format!("Name of the keyfile to generate under {}{} (your username will be used by default)",
-                                get_default_vaultfile_folder(), MAIN_SEPARATOR)
-                        ),
-                )
-                .arg(
                     Arg::with_name("key-path")
                         .long("key-path")
                         .takes_value(true)
-                        .conflicts_with("key-name")
-                        .help("Path of the file to place the generated key in."),
+                        .value_name("folder or file for private key")
+                        .default_value(default_vaultfile_folder)
+                        .long_help(&format!("Path of key in which to create a private/public keypair. The public key will be placed in a file with the same name + '.pub'. If it points to a folder, the keypair (private / public) will be stored in {}.key and {}.key.pub", username, username))
+                        .help("Path to place the generated public/private keypair in."),
                 )
                 .arg(
                     Arg::with_name("overwrite-yes")
@@ -714,7 +699,7 @@ fn main() {
                 .help("The name of the private key to use to read the secret (it does not need to be registered under the same name in the vaultfile).")
                 .long_help(&format!("The name of the private key to use to read the secret (it does not need to be registered under the same name in the vaultfile).
                     It must be present as <key_name>.key under the {} directory in your home directory, and must be registered in the vaultfile.",
-                    get_default_vaultfile_folder()))
+                    get_default_vaultfile_folder().to_str().unwrap()))
             )
             .arg(
                 Arg::with_name("key-file")
