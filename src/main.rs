@@ -37,8 +37,7 @@ fn get_username() -> String {
 fn get_default_vaultfile_folder() -> PathBuf {
     let xdg_config_home = match std::env::var("XDG_CONFIG_HOME") {
         Ok(xdg_config_home) => Path::new(&xdg_config_home).to_path_buf(),
-        Err(_) => Path::new(&get_home_directory())
-            .join(".config"),
+        Err(_) => Path::new(&get_home_directory()).join(".config"),
     };
     xdg_config_home.join("vaultfile")
 }
@@ -476,11 +475,7 @@ fn main() {
     let username = get_username();
     let default_vaultfile_path = get_default_vaultfile_folder();
     let default_vaultfile_folder = default_vaultfile_path.to_str().unwrap();
-    let default_key_file = format!(
-        "{}/{}.key.pub",
-        default_vaultfile_folder,
-        get_username()
-    );
+    let default_key_file = format!("{}/{}.key.pub", default_vaultfile_folder, get_username());
     let default_vaultfile_name = "Vaultfile";
     let cli_call = App::new("vaultfile")
         .version(env!("CARGO_PKG_VERSION"))
@@ -699,7 +694,7 @@ fn main() {
                 .help("The name of the private key to use to read the secret (it does not need to be registered under the same name in the vaultfile).")
                 .long_help(&format!("The name of the private key to use to read the secret (it does not need to be registered under the same name in the vaultfile).
                     It must be present as <key_name>.key under the {} directory in your home directory, and must be registered in the vaultfile.",
-                    get_default_vaultfile_folder().to_str().unwrap()))
+                    default_vaultfile_folder))
             )
             .arg(
                 Arg::with_name("key-file")
