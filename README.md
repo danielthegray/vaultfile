@@ -10,53 +10,68 @@ Other tools with more rich control of secrets require a server, which is additio
 With `vaultfile` I wanted to take a simpler approach. The core ideas are listed below:
 1. **Secret storage should be contained within a vaultfile.** No servers should be needed! It should be possible to safely commit this file to source control.
 2. **Access to the secret should be granted on a person-by-person basis**. Asymmetric cryptography should be used to allow multiple people to have individual access to the shared secret(s). The public keys of all allowed parties should also be included inside the secrets file, to make it easy to add new shared secrets to the file without needing to consciously store everybody's keys.
-3. **Revocation of a secret should be manageable in some way**. Under the assumptions of the two previous points:
-    * Everyone who has the vaultfile & a private key corresponding to one of the public keys registered inside the vaultfile has perpetual access to the all the secrets in the vaultfile, since the person could have copied the secret to another place (this is the case with any shared secret system).
-    * the only way for the secret to be truly "revoked" is to change the shared secret. This is something that, in my opinion, should always be the case when revoking a shared secret under any scheme. The proposed revocation process will be shared in more detail in the corresponding implementation section.
 
-## Implementation
+## What is inside a `Vaultfile`?
 
-The vaultfile is a serialized JSON file with the following sections:
+The `Vaultfile` is a serialized JSON file with the following sections:
 - A list of public keys that are granted access to the shared secrets.
     - These keys are simple JSON serializations of the Rust `RSAPublicKey` struct, so they are just JSON objects as well (not PEM, etc.)
-- A list of shared secrets. Each shared secret contains:
+- A list of shared secrets/passwords/credentials. Each shared secret contains:
     - the **secret**, encrypted with a symmetric key, serialized as a Base64 string.
-    - the **encrypted symmetric key**, itself encrypted with all of the public keys registered in the vaultfile. **Any secret should have an entry here for _each and every_ public key registered in the vaultfile.**
+    - the **encrypted symmetric key**, encrypted with each and every one of the public keys registered in the vaultfile. 
 
-In the examples it is shown with a `.vault` extension, but this is merely a suggestion. Any file extension will be accepted by the tool without complaints as long as it is a readable vaultfile.
+By default, it will store this data in a file called `Vaultfile` (in the current folder). If you would like to override this setting, use the `--file` command-line flag.
 
-### Private/public key storage
+## How should private/public keys be handled?
 
-Vaultfile private/public keys can be generated/stored anywhere. However, by default, they will be stored in the users `$HOME` directory, under `$HOME/.config/vaultfile/`. For Windows environments where `$HOME` is not defined, Vaultfile will fallback onto the `%USERPROFILE%` environment variable.
+**NOTE: You cannot use `vaultfile` without FIRST generating a private/public key pair!** 
 
-The default private key filename is `$USER.key` (along with the public key `$USER.key.pub`). On Windows environments where `$USER` is not defined, Vaultfile will fallback onto `%USERNAME%`.
-
-### Workflow
-First, create your private/public keypair, with vaultfile itself (more options in the Usage section):
+Private and public keypairs should be generated on the machine and not moved off of it. To generate a private/public keypair on the machine, invoke the following command:
 
     vaultfile generate-key
 
-This command will create a key under `$HOME/.config/vaultfile/$USER.key` (and `$USER.key.pub` at the same location) (or `%USERPROFILE%/.config/vaultfile/%USERNAME%.key` on Windows)
+This command will create a key under your home folder, in a file named after your username. On Unix systems, this will be:
+* `$HOME/.config/vaultfile/$USER.key` (private key)
+* `$HOME/.config/vaultfile/$USER.key.pub` (public key)
 
-To create a new vaultfile, use the register-key, and register the key you have just created:
+and on Windows (`USERPROFILE` is the fallback in case the `HOME` enviroment variable is not defined, so it works as expected in Cygwin):
 
-    vaultfile register-key --file my_vaultfile.vault --key-name=$USER --key-file=$HOME/.config/vaultfile/$USER.key.pub
+* `%USERPROFILE%/.config/vaultfile/%USERNAME%.key` (private key)
+* `%USERPROFILE%/.config/vaultfile/%USERNAME%.key.pub` (public key)
 
- Even if you specify the private key in this step (instead of the public key), only the public part will be saved in the vaultfile, so it's not a big deal to specify either one. The main reason of having the public file as well is for convenience.
+Key revocation is essentially understood as changing the secret/password/credential in the `Vaultfile`, since in any case, there is no way to prevent the user from having kept the secret value stored elsewhere. Users should not use the secret directly, but always read the "current value" from the `Vaultfile`, which should make changing these secrets much easier (as they only need to be changed in one central location).
+
+## Simple/example workflow
+
+Below, a sample usage of the `vaultfile` application will be shown. All of the commands work with a file called `Vaultfile` in the current folder (from where the tool is invoked). All of the subcommands allow overriding this by using the `--file` flag.
+
+All operations on a `Vaultfile` (except creating a new one) require you to possess a private key that has previously been registered in it. This key will by default be loaded from your environment (from the default generated location), but there are command line flags to override this, if needed.
+
+### Create a new vaultfile
+
+**Note: You cannot use `vaultfile` without FIRST generating a private/public key pair!** 
+
+To create a new vaultfile, use the `new` subcommand (an alias of `register-key`), register the key you have just created in a new Vaultfile:
+
+    vaultfile new
+
+This will create a new file called `Vaultfile` in the current folder, containing your public key.
+
+Even if you specify the private key in this step (instead of the public key), only the public part will be saved in the vaultfile, so it's not a big deal to specify either one. The main reason of having the public file as well is for convenience.
 
 Other/new keys can be registered without possessing a private key as long as the file contains no secrets. Once a secret has been added to the vaultfile, the person must have a private key corresponding to one of the public keys, since part of the process will be to re-encrypt all of the secrets of the file with the newly added public key.
 
 ### Adding a secret (password, API key, etc.)
 When you're ready to add a secret value to the vaultfile, execute:
 
-    vaultfile add-secret --file my_vaultfile.vault --name aws_key --value ABCDEFG1234567890
+    vaultfile add-secret --name aws_key --value ABCDEFG1234567890
 
 You can also pass in a Base64-encoded value with --base64-value, which will be decoded before storing the value.
 
 ### Reading a secret
 You can read a secret from the vaultfile if you possess a private key which corresponds to one of the public keys registered in the vaultfile. If you have your private key stored in the default location, then it's simply a matter of executing:
 
-    vaultfile read-secret -f my_vaultfile.vault -n aws_key
+    vaultfile read-secret -n aws_key
 
 Note that for this example, the short forms of the arguments `--name` and `--file` were used. To see which arguments have short forms and what they are, you can always invoke `--help`.
 
@@ -73,7 +88,7 @@ Ideally, the users would always be reading the shared secret from the vaultfile 
 
 Note that you cannot de-register the last key from the vaultfile (it must have at least one key registered).
 
-## Usage
+## Getting help / usage
 
 To see a help message, you can invoke:
 

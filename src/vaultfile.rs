@@ -42,8 +42,8 @@ impl Vaultfile {
         }
     }
 
-    pub fn load_from_file(vaultfile_path: &str) -> Result<Vaultfile, VaultfileError> {
-        if !Path::new(vaultfile_path).is_file() {
+    pub fn load_from_file(vaultfile_path: &Path) -> Result<Vaultfile, VaultfileError> {
+        if !vaultfile_path.is_file() {
             return Err(VaultfileError {
                 kind: VaultfileErrorKind::VaultfileNotFound,
             });
@@ -85,8 +85,9 @@ impl Vaultfile {
         RSAPrivateKey::new(&mut rng, bits).expect("Failed to generate key!")
     }
 
-    pub fn generate_and_save_key(private_key_path: &str) -> Result<(), VaultfileError> {
-        let public_key_path = format!("{}.pub", &private_key_path);
+    pub fn generate_and_save_key(private_key_path: &Path) -> Result<(), VaultfileError> {
+        let public_key_path = format!("{}.pub", private_key_path.to_str().unwrap());
+        let public_key_path = Path::new(&public_key_path);
         let private_key = Vaultfile::generate_key();
         let public_key = private_key.to_public_key();
         let private_key_json = serde_json::to_string(&private_key).unwrap();
@@ -95,7 +96,7 @@ impl Vaultfile {
             Ok(_) => (),
             Err(error) => panic!("{}", error),
         };
-        match write_json_to_file(&public_key_path, public_key_json, true) {
+        match write_json_to_file(public_key_path, public_key_json, true) {
             Ok(_) => Ok(()),
             Err(error) => panic!(error),
         }
@@ -302,7 +303,7 @@ impl Vaultfile {
         Ok(())
     }
 
-    pub fn save_to_file(&self, vaultfile_path: &str) -> Result<(), VaultfileError> {
+    pub fn save_to_file(&self, vaultfile_path: &Path) -> Result<(), VaultfileError> {
         let vaultfile_json = serde_json::to_string_pretty(&self)?;
         let vaultfile_json = Vaultfile::move_keys_into_one_line(vaultfile_json);
         write_json_to_file(vaultfile_path, vaultfile_json, true)?;
@@ -428,8 +429,8 @@ fn decrypt_secret(
     }
 }
 
-pub fn load_private_key(private_key_path: &str) -> Result<RSAPrivateKey, VaultfileError> {
-    if !Path::new(private_key_path).is_file() {
+pub fn load_private_key(private_key_path: &Path) -> Result<RSAPrivateKey, VaultfileError> {
+    if !private_key_path.is_file() {
         return Err(VaultfileError {
             kind: VaultfileErrorKind::PrivateKeyNotFound,
         });
@@ -439,7 +440,7 @@ pub fn load_private_key(private_key_path: &str) -> Result<RSAPrivateKey, Vaultfi
     Ok(private_key)
 }
 
-pub fn load_public_key(public_key_path: &str) -> Result<RSAPublicKey, VaultfileError> {
+pub fn load_public_key(public_key_path: &Path) -> Result<RSAPublicKey, VaultfileError> {
     let public_key_json = load_json_from_file(public_key_path)?;
     parse_public_key(&public_key_json)
 }
@@ -453,7 +454,7 @@ pub fn public_key_to_json(public_key: &RSAPublicKey) -> Result<String, serde_jso
     serde_json::to_string(public_key)
 }
 
-pub fn load_json_from_file(json_file_path: &str) -> Result<String, std::io::Error> {
+pub fn load_json_from_file(json_file_path: &Path) -> Result<String, std::io::Error> {
     let mut json_file = File::open(json_file_path)?;
     let mut json_string = String::new();
     json_file.read_to_string(&mut json_string)?;
@@ -461,7 +462,7 @@ pub fn load_json_from_file(json_file_path: &str) -> Result<String, std::io::Erro
 }
 
 fn write_json_to_file(
-    json_file_path: &str,
+    json_file_path: &Path,
     json: String,
     overwrite: bool,
 ) -> Result<(), std::io::Error> {
@@ -486,10 +487,11 @@ mod vaultfile_tests {
     #[test]
     fn key_generation() {
         let filename = format!("priv_{}.key", rand::thread_rng().next_u32());
-        Vaultfile::generate_and_save_key(&filename).unwrap();
-        load_private_key(&filename).expect("Private key could not be loaded from file!");
+        Vaultfile::generate_and_save_key(Path::new(&filename)).unwrap();
+        load_private_key(Path::new(&filename)).expect("Private key could not be loaded from file!");
         let public_key_name = format!("{}.pub", &filename);
-        load_public_key(&public_key_name).expect("Public key could not be loaded from file!");
+        load_public_key(Path::new(&public_key_name))
+            .expect("Public key could not be loaded from file!");
         std::fs::remove_file(filename).unwrap();
         std::fs::remove_file(public_key_name).unwrap();
     }
@@ -498,16 +500,21 @@ mod vaultfile_tests {
     fn test_json_file_write() {
         let filename = format!("json{}.key", rand::thread_rng().next_u32());
         print!("Test writing to file {}", &filename);
-        super::write_json_to_file(&filename, String::from("{\"test\": 123}"), false)
+        super::write_json_to_file(Path::new(&filename), String::from("{\"test\": 123}"), false)
             .expect("The file could not be written!");
-        match super::write_json_to_file(&filename, String::from("{\"test\": 123}"), false) {
+        match super::write_json_to_file(
+            Path::new(&filename),
+            String::from("{\"test\": 123}"),
+            false,
+        ) {
             Ok(_) => panic!(
                 "The file {} was overwritten without it being allowed!",
                 &filename
             ),
             Err(_) => (),
         };
-        match super::write_json_to_file(&filename, String::from("{\"test\": 123}"), true) {
+        match super::write_json_to_file(Path::new(&filename), String::from("{\"test\": 123}"), true)
+        {
             Ok(_) => (),
             Err(_) => panic!(
                 "The file {} was NOT overwritten when it was allowed!",
@@ -529,8 +536,8 @@ mod vaultfile_tests {
             .register_key("test_key", private_key.to_public_key(), &private_key)
             .unwrap();
         vaultfile.add_secret_utf8(secret_key, secret).unwrap();
-        vaultfile.save_to_file(&vault_filename).unwrap();
-        let vaultfile_to_check = Vaultfile::load_from_file(&vault_filename).unwrap();
+        vaultfile.save_to_file(Path::new(&vault_filename)).unwrap();
+        let vaultfile_to_check = Vaultfile::load_from_file(Path::new(&vault_filename)).unwrap();
         let recovered_secret = vaultfile_to_check
             .read_secret(secret_key, &private_key)
             .unwrap();
