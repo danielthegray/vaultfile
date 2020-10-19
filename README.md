@@ -80,7 +80,7 @@ The secret will be printed out to `stdout`. This allows easy integration with ot
 ### Removal of a key (revocation of access)
 In its simplest form, it would consist of removal of the key from the list of registered keys, as well as all of the encrypted values for that key. To perform this action, execute:
 
-    vaultfile deregister-key --file my_vaultfile.vault --key-name $user
+    vaultfile deregister-key --key-name $user
 
 However, as stated earlier, this could still mean that the person has a copy of the previously encrypted secret. The best way to fully "revoke" the secret is to change the secret value after de-registering the key, which will share this new value only with the registered keys.
 
@@ -134,12 +134,12 @@ If a key with that name already exists in the vaultfile, a confirmation warning 
 #### Registration of a new key in a vaultfile with secrets
 If the vaultfile already contains secrets, there is one more element needed to register a new key: a valid private key whose public key is already registered in the vaultfile.
 
-The reason is simple: any newly added key needs to gain access to all the secrets contained in the vaultfile (by design). Therefore, to register a new key, you need to be able to read all of the vaultfile's secrets, to re-encrypt them with the newly registered public key, thereby granting access to the new trusted party.
+The reason is simple: any newly added key needs to gain access to all the secrets contained in the `Vaultfile` (by design). Therefore, to register a new key, you need to be able to read all of the `Vaultfile`'s secrets, to re-encrypt them with the newly registered public key, thereby granting access to the new trusted party.
 
 The parameter to specify this is `--private-key-name`, which should be the name of a file under the `~/.config/vaultfile` directory (or `%USERPROFILE%\.config/vaultfile` on Windows), with a `.key` extension (i.e. `--private-key-name mithrandir` will open the file `~/.config/vaultfile/mithrandir.key`). Usage template:
 
-    vaultfile register-key -f secret_file.vault --key-name=<KEY_NAME> --key-file=<PATH_TO_PUBLIC_KEY_FILE> --private--key-name=<PRIVATE_KEY_NAME>
-    vaultfile register-key -f secret_file.vault --key-name=<KEY_NAME> --key-json=<PUBLIC_KEY_JSON_STRING> --private-key-name=<PRIVATE_KEY_NAME>
+    vaultfile register-key --key-name=<KEY_NAME> --key-file=<PATH_TO_PUBLIC_KEY_FILE> --private--key-name=<PRIVATE_KEY_NAME>
+    vaultfile register-key --key-name=<KEY_NAME> --key-json=<PUBLIC_KEY_JSON_STRING> --private-key-name=<PRIVATE_KEY_NAME>
 
 #### Listing of the public keys registered in the vaultfile
 
@@ -152,7 +152,7 @@ Will output a list of names of the keys registered in the vaultfile.
 #### Show a public key registered in a vaultfile
 To show the JSON-encoding of a public key registered in a vaultfile:
 
-    vaultfile list-keys --file secret_file.vault --key-name gandalf
+    vaultfile list-keys --key-name gandalf
 
 This will output a JSON string in one line to `stdout`, containing the numerical parameters of the public key registered in the vaultfile. Specifying a name that is not registered will output an error message on `stderr`.
 
@@ -160,14 +160,14 @@ This will output a JSON string in one line to `stdout`, containing the numerical
 
 De-register a public key from the vaultfile:
 
-    vaultfile deregister-key -f secret_file.vault --key-name <KEY_NAME>
+    vaultfile deregister-key --key-name <KEY_NAME>
 
 ### Secret management
 #### Write a secret to a vaultfile
 To write/add a secret to a vaultfile, the following commands can be used:
 
-    vaultfile add-secret --file secret_file.vault --name=<SECRET_NAME> --value=<SECRET_VALUE>
-    vaultfile add-secret --file secret_file.vault --name=<SECRET_NAME> --base64-value=<BASE64_ENCODED_SECRET_VALUE>
+    vaultfile add-secret --name=<SECRET_NAME> --value=<SECRET_VALUE>
+    vaultfile add-secret --name=<SECRET_NAME> --base64-value=<BASE64_ENCODED_SECRET_VALUE>
 
 if a secret with that name already exists in the vaultfile, a confirmation warning will appearing asking if it's OK to overwrite the secret (can be overwritten without confirmation if the `-y` flag is added).
 
@@ -179,14 +179,14 @@ Notice that a secret can be added to the vaultfile without being in possession o
 
 List the keys registered in the vaultfile:
 
-    vaultfile list-secrets --file secret_file.vault
+    vaultfile list-secrets
 
 Will output a list of names of the secrets that are stored in the vaultfile.
 
 #### Read a secret from the vaultfile
 To read a secret from the vaultfile, the following command can be used:
 
-    vaultfile read-secret --file secret_file.vault --name <SECRET_NAME> [--key-name <KEY_NAME>> | --key-file <KEY_FILE>] [--no-eol]
+    vaultfile read-secret --name <SECRET_NAME> [--key-name <KEY_NAME>> | --key-file <KEY_FILE>] [--no-eol]
 
 The result will be printed out to `stdout`.
 
@@ -200,7 +200,7 @@ If you do not wish an end-of-line character to be printed after the secret value
 
 To delete a secret from the vaultfile, the following command can be used:
 
-    vaultfile delete-secret --file secret_file.vault --name <SECRET_NAME>
+    vaultfile delete-secret --name <SECRET_NAME>
 
 This will remove the secret named SECRET_NAME from the vaultfile. No keys will be asked for. Since it's just a JSON file modification, this operation could also easily be performed manually, so it makes no sense to add artificial restrictions to this subcommand.
 
