@@ -98,7 +98,7 @@ impl Vaultfile {
         };
         match write_json_to_file(public_key_path, public_key_json, true) {
             Ok(_) => Ok(()),
-            Err(error) => panic!(error),
+            Err(error) => panic!("{}", error),
         }
     }
 
@@ -353,7 +353,7 @@ struct EncryptionResult {
     encrypted_base: String,
 }
 
-fn encrypt_base64_string(plaintext_base64: &str) -> Result<EncryptionResult, base64::Base64Error> {
+fn encrypt_base64_string(plaintext_base64: &str) -> Result<EncryptionResult, base64::DecodeError> {
     let raw_plaintext = base64::decode(plaintext_base64)?;
     Ok(encrypt_byte_sequence(&raw_plaintext))
 }
@@ -601,8 +601,8 @@ impl From<rsa::errors::Error> for VaultfileError {
     }
 }
 
-impl From<base64::Base64Error> for VaultfileError {
-    fn from(err: base64::Base64Error) -> VaultfileError {
+impl From<base64::DecodeError> for VaultfileError {
+    fn from(err: base64::DecodeError) -> VaultfileError {
         VaultfileError {
             kind: VaultfileErrorKind::BadBase64String(format!("{}", err)),
         }
