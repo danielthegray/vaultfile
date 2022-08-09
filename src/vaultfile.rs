@@ -1,12 +1,11 @@
 extern crate base64;
 extern crate crypto;
-extern crate rand;
 extern crate rsa;
 
 use crypto::aessafe::{AesSafe256DecryptorX8, AesSafe256EncryptorX8};
 use crypto::symmetriccipher::{BlockDecryptorX8, BlockEncryptorX8};
-use rand::RngCore;
-use rsa::{PaddingScheme, PublicKey, RSAPrivateKey, RSAPublicKey};
+use rsa::{PaddingScheme, PublicKey, PublicKeyParts, RsaPrivateKey, RsaPublicKey};
+use rsa::rand_core::{RngCore, SeedableRng};
 
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -17,7 +16,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-const PADDING: PaddingScheme = PaddingScheme::PKCS1v15;
+const PADDING: PaddingScheme = PaddingScheme::PKCS1v15Encrypt;
 
 #[derive(Serialize, Deserialize)]
 pub struct VaultfileSecret {
@@ -29,7 +28,7 @@ pub struct VaultfileSecret {
 
 #[derive(Serialize, Deserialize)]
 pub struct Vaultfile {
-    keys: HashMap<String, RSAPublicKey>,
+    keys: HashMap<String, RsaPublicKey>,
     // each secret is stored under a name
     secrets: HashMap<String, VaultfileSecret>,
 }
@@ -79,10 +78,10 @@ impl Vaultfile {
         Ok(())
     }
 
-    pub fn generate_key() -> RSAPrivateKey {
-        let mut rng = rand::rngs::OsRng;
+    pub fn generate_key() -> RsaPrivateKey {
+        let mut rng = rand_chacha::ChaChaRng::from_entropy();
         let bits = 2048;
-        RSAPrivateKey::new(&mut rng, bits).expect("Failed to generate key!")
+        RsaPrivateKey::new(&mut rng, bits).expect("Failed to generate key!")
     }
 
     pub fn generate_and_save_key(private_key_path: &Path) -> Result<(), VaultfileError> {
@@ -115,10 +114,10 @@ impl Vaultfile {
         self.keys.contains_key(key_name)
     }
 
-    pub fn get_key(&self, key_name: &str) -> Option<RSAPublicKey> {
+    pub fn get_key(&self, key_name: &str) -> Option<RsaPublicKey> {
         match self.keys.get(key_name) {
             Some(pub_key) => {
-                Some(RSAPublicKey::new(pub_key.n().clone(), pub_key.e().clone()).unwrap())
+                Some(RsaPublicKey::new(pub_key.n().clone(), pub_key.e().clone()).unwrap())
             }
             None => None,
         }
@@ -129,12 +128,12 @@ impl Vaultfile {
     pub fn register_key(
         &mut self,
         name_new_key: &str,
-        new_key: RSAPublicKey,
-        already_registered_private_key: &RSAPrivateKey,
+        new_key: RsaPublicKey,
+        already_registered_private_key: &RsaPrivateKey,
     ) -> Result<(), VaultfileError> {
         if self.secrets.len() > 0 {
             let private_key_name =
-                match self.find_registered_name_of_key(already_registered_private_key) {
+                match self.find_registered_name_of_key(&RsaPublicKey::from(already_registered_private_key)) {
                     Some(key_name) => key_name,
                     None => {
                         return Err(VaultfileError {
@@ -142,7 +141,7 @@ impl Vaultfile {
                         });
                     }
                 };
-            let mut rng = rand::rngs::OsRng;
+            let mut rng = rand_chacha::ChaChaRng::from_entropy();
             // we now grant access to all the shared secrets to the newly registered key
             for (secret_name, secret) in self.secrets.iter_mut() {
                 let encrypted_key = match secret.encrypted_key.get(&private_key_name) {
@@ -206,7 +205,7 @@ impl Vaultfile {
         secret_name: &str,
         secret_value_utf8: &str,
     ) -> Result<(), VaultfileError> {
-        let mut rng = rand::rngs::OsRng;
+        let mut rng = rand_chacha::ChaChaRng::from_entropy();
         let mut encrypted_key: HashMap<String, String> = HashMap::new();
         let encrypted_secret = encrypt_utf8_string(secret_value_utf8);
         for (key_name, rsa_key) in self.keys.iter() {
@@ -233,7 +232,7 @@ impl Vaultfile {
         secret_name: &str,
         secret_value_base64: &str,
     ) -> Result<(), VaultfileError> {
-        let mut rng = rand::rngs::OsRng;
+        let mut rng = rand_chacha::ChaChaRng::from_entropy();
         let mut encrypted_key: HashMap<String, String> = HashMap::new();
         // TODO: add explicit error for when the base64 input string is bad!
         let encrypted_secret = encrypt_base64_string(secret_value_base64)?;
@@ -259,9 +258,9 @@ impl Vaultfile {
     pub fn read_secret(
         &self,
         secret_name: &str,
-        private_key: &RSAPrivateKey,
+        private_key: &RsaPrivateKey,
     ) -> Result<String, VaultfileError> {
-        let key_name = match self.find_registered_name_of_key(private_key) {
+        let key_name = match self.find_registered_name_of_key(&RsaPublicKey::from(private_key)) {
             Some(name) => name,
             None => {
                 return Err(VaultfileError {
@@ -364,13 +363,14 @@ fn encrypt_utf8_string(plaintext_utf8: &str) -> EncryptionResult {
 
 fn encrypt_byte_sequence(plaintext: &[u8]) -> EncryptionResult {
     let mut key: [u8; 32] = [0u8; 32];
-    rand::rngs::OsRng.fill_bytes(&mut key);
+    let mut rng = rand_chacha::ChaChaRng::from_entropy();
+    rng.fill_bytes(&mut key);
     let encryptor = AesSafe256EncryptorX8::new(&key);
     let plaintext_length_bytes = (plaintext.len() as u64).to_le_bytes();
     let full_plaintext_length = plaintext_length_bytes.len() + plaintext.len();
     let padding_length = 128 - full_plaintext_length % 128;
     let mut plaintext_padding = vec![0; padding_length];
-    rand::rngs::OsRng.fill_bytes(&mut plaintext_padding);
+    rng.fill_bytes(&mut plaintext_padding);
     let mut full_plaintext: Vec<u8> = Vec::with_capacity(
         plaintext_length_bytes.len() + plaintext.len() + plaintext_padding.len(),
     );
@@ -429,28 +429,28 @@ fn decrypt_secret(
     }
 }
 
-pub fn load_private_key(private_key_path: &Path) -> Result<RSAPrivateKey, VaultfileError> {
+pub fn load_private_key(private_key_path: &Path) -> Result<RsaPrivateKey, VaultfileError> {
     if !private_key_path.is_file() {
         return Err(VaultfileError {
             kind: VaultfileErrorKind::PrivateKeyNotFound,
         });
     }
     let private_key_json = load_json_from_file(private_key_path)?;
-    let private_key: RSAPrivateKey = serde_json::from_str(&private_key_json)?;
+    let private_key: RsaPrivateKey = serde_json::from_str(&private_key_json)?;
     Ok(private_key)
 }
 
-pub fn load_public_key(public_key_path: &Path) -> Result<RSAPublicKey, VaultfileError> {
+pub fn load_public_key(public_key_path: &Path) -> Result<RsaPublicKey, VaultfileError> {
     let public_key_json = load_json_from_file(public_key_path)?;
     parse_public_key(&public_key_json)
 }
 
-pub fn parse_public_key(public_key_json: &str) -> Result<RSAPublicKey, VaultfileError> {
-    let public_key: RSAPublicKey = serde_json::from_str(&public_key_json)?;
+pub fn parse_public_key(public_key_json: &str) -> Result<RsaPublicKey, VaultfileError> {
+    let public_key: RsaPublicKey = serde_json::from_str(&public_key_json)?;
     Ok(public_key)
 }
 
-pub fn public_key_to_json(public_key: &RSAPublicKey) -> Result<String, serde_json::Error> {
+pub fn public_key_to_json(public_key: &RsaPublicKey) -> Result<String, serde_json::Error> {
     serde_json::to_string(public_key)
 }
 
@@ -482,11 +482,11 @@ fn write_json_to_file(
 mod vaultfile_tests {
 
     use super::*;
-    use rand::RngCore;
 
     #[test]
     fn key_generation() {
-        let filename = format!("priv_{}.key", rand::thread_rng().next_u32());
+        let mut rng = rand_chacha::ChaChaRng::from_entropy();
+        let filename = format!("priv_{}.key", rng.next_u32());
         Vaultfile::generate_and_save_key(Path::new(&filename)).unwrap();
         load_private_key(Path::new(&filename)).expect("Private key could not be loaded from file!");
         let public_key_name = format!("{}.pub", &filename);
@@ -498,7 +498,8 @@ mod vaultfile_tests {
 
     #[test]
     fn test_json_file_write() {
-        let filename = format!("json{}.key", rand::thread_rng().next_u32());
+        let mut rng = rand_chacha::ChaChaRng::from_entropy();
+        let filename = format!("json{}.key", rng.next_u32());
         print!("Test writing to file {}", &filename);
         super::write_json_to_file(Path::new(&filename), String::from("{\"test\": 123}"), false)
             .expect("The file could not be written!");
@@ -526,7 +527,8 @@ mod vaultfile_tests {
 
     #[test]
     fn test_secret_write_and_read() {
-        let id = rand::thread_rng().next_u32();
+        let mut rng = rand_chacha::ChaChaRng::from_entropy();
+        let id = rng.next_u32();
         let vault_filename = format!("test{}.vault", id);
         let secret_key = "test_secret";
         let secret = "SECRET_VALUE_12345";
