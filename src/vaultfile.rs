@@ -4,8 +4,8 @@ extern crate rsa;
 
 use crypto::aessafe::{AesSafe256DecryptorX8, AesSafe256EncryptorX8};
 use crypto::symmetriccipher::{BlockDecryptorX8, BlockEncryptorX8};
-use rsa::{PaddingScheme, PublicKey, PublicKeyParts, RsaPrivateKey, RsaPublicKey};
 use rsa::rand_core::{RngCore, SeedableRng};
+use rsa::{PaddingScheme, PublicKey, PublicKeyParts, RsaPrivateKey, RsaPublicKey};
 
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -132,15 +132,16 @@ impl Vaultfile {
         already_registered_private_key: &RsaPrivateKey,
     ) -> Result<(), VaultfileError> {
         if self.secrets.len() > 0 {
-            let private_key_name =
-                match self.find_registered_name_of_key(&RsaPublicKey::from(already_registered_private_key)) {
-                    Some(key_name) => key_name,
-                    None => {
-                        return Err(VaultfileError {
-                            kind: VaultfileErrorKind::PrivateKeyNotRegistered,
-                        });
-                    }
-                };
+            let private_key_name = match self
+                .find_registered_name_of_key(&RsaPublicKey::from(already_registered_private_key))
+            {
+                Some(key_name) => key_name,
+                None => {
+                    return Err(VaultfileError {
+                        kind: VaultfileErrorKind::PrivateKeyNotRegistered,
+                    });
+                }
+            };
             let mut rng = rand_chacha::ChaChaRng::from_entropy();
             // we now grant access to all the shared secrets to the newly registered key
             for (secret_name, secret) in self.secrets.iter_mut() {
